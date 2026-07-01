@@ -2,17 +2,18 @@
 
 Standardised plotting, statistics, and multi-modal integration helpers for the eight core ctDNA deliverables. Built around the Guardant Health Infinity platform, extensible to other vendors.
 
-## Install
-
-```r
-devtools::install_github("nikleotide/ctdnaTM
-```
-
 Suggested — install `ComplexHeatmap` for publication-quality oncoprints:
 
 ```r
 install.packages("BiocManager")
 BiocManager::install("ComplexHeatmap")
+```
+
+## Install
+
+```r
+install.packages("devtools")
+devtools::install_github("nikleotide/ctdnaTM")
 ```
 
 ## Five-minute tour
