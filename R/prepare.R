@@ -157,12 +157,11 @@
 
 # ---- per-variant frame ------------------------------------------------------
 .ctdna_build_variants <- function(inf) {
+  # prep$variants is the infinity_report verbatim, only augmented with a
+  # Baseline flag. NO filtering here. ctdna_sample_qc() is the ONLY place
+  # variants get removed, and only for those tied to samples that failed QC.
   v <- inf
   v$Baseline <- .ctdna_is_baseline_label(v[[.o("time")]])
-  # keep variant rows (a detected alteration); samples with no variant are
-  # represented in $samples, not here.
-  g <- .o("gene")
-  if (g %in% names(v)) v <- v[!is.na(v[[g]]) & nzchar(as.character(v[[g]])), , drop = FALSE]
   rownames(v) <- NULL
   v
 }
@@ -737,45 +736,44 @@ ctdna_sample_qc <- function(prep,
   c_samp <- .o("sample"); c_subj <- .o("subject")
   s <- prep$samples
   pass <- .ctdna_sample_pass(s, sample_status, plasma_min, cfdna_min)
-  kept_ids  <- s[[c_samp]][pass]
-  removed_samples  <- s[!pass, , drop = FALSE]
+  failed_ids <- s[[c_samp]][!pass]
+  removed_samples <- s[!pass, , drop = FALSE]
   prep$samples <- s[pass, , drop = FALSE]
 
+  # ---- variant cascade: remove ONLY variants whose Sample_ID matches a
+  # failed sample. Nothing else is touched. Variants with NA / unmatched
+  # Sample_ID stay.
   removed_variants <- prep$variants[0, , drop = FALSE]
-  if (is.data.frame(prep$variants) && c_samp %in% names(prep$variants)) {
-    drop_v <- !(prep$variants[[c_samp]] %in% kept_ids)
+  if (is.data.frame(prep$variants) && c_samp %in% names(prep$variants) &&
+      length(failed_ids)) {
+    drop_v <- prep$variants[[c_samp]] %in% failed_ids
     removed_variants <- prep$variants[drop_v, , drop = FALSE]
     prep$variants    <- prep$variants[!drop_v, , drop = FALSE]
   }
 
-  # clinical cascade: a patient with no surviving sample is dropped from
-  # $clinical and recorded.
-  removed_clinical <- NULL
-  if (is.data.frame(prep$clinical) && c_subj %in% names(prep$clinical)) {
-    surviving_pts <- unique(prep$samples[[c_subj]])
-    drop_c <- !(prep$clinical[[c_subj]] %in% surviving_pts)
-    removed_clinical <- prep$clinical[drop_c, , drop = FALSE]
-    prep$clinical    <- prep$clinical[!drop_c, , drop = FALSE]
-    rownames(prep$clinical) <- NULL
-  }
+  # NO clinical cascade. prep$clinical is left alone; patients missing from
+  # prep$samples/$variants after QC remain in $clinical (they'll show up as
+  # all-wildtype columns in the oncoprint, and get filtered by the
+  # per-plot visit filter for trajectory plots).
 
   rownames(prep$samples) <- NULL
   if (is.data.frame(prep$variants)) rownames(prep$variants) <- NULL
   rownames(removed_samples) <- NULL; rownames(removed_variants) <- NULL
 
-  # accumulate across repeated QC runs
+  # accumulate across repeated QC runs (clinical slot kept for back-compat
+  # but never populated by this function now).
   prior <- prep$qc_removed
   prep$qc_removed <- list(
     samples  = if (is.null(prior)) removed_samples  else rbind(prior$samples,  removed_samples),
     variants = if (is.null(prior)) removed_variants else rbind(prior$variants, removed_variants),
-    clinical = if (is.null(prior)) removed_clinical else rbind(prior$clinical, removed_clinical))
+    clinical = if (is.null(prior)) NULL             else prior$clinical)
 
   qs <- attr(prep, "qc_state"); qs[c("samples","variants")] <- TRUE
   attr(prep, "qc_state") <- qs
   if (verbose) {
-    message(sprintf("ctdna_sample_qc: %d of %d samples pass (%.1f%%); %d variants and %d clinical record(s) cascaded out.",
+    message(sprintf("ctdna_sample_qc: %d of %d samples pass (%.1f%%); %d variants cascaded out (tied to failed samples).",
                     sum(pass), length(pass), 100 * mean(pass),
-                    nrow(removed_variants), if (is.null(removed_clinical)) 0L else nrow(removed_clinical)))
+                    nrow(removed_variants)))
     if (any(!pass))
       message("  removed sample IDs: ",
               paste(utils::head(removed_samples[[c_samp]], 20), collapse = ", "),

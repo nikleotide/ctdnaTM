@@ -1,11 +1,11 @@
 Package: ctdnaTM
 Type: Package
 Title: ctDNA Deliverables
-Version: 0.75.3
+Version: 0.75.5
 Authors@R: c(
     person(given = "Hamid", family = "Nikbakht",
            role = c("aut", "cre", "cph"),
-           email = "h.nikbakht@gmail.com")
+           email = "hamid.nikbakht@noreply.github.com")
   )
 Description: Standardised plotting, statistics, and multi-modal integration
     helpers for the eight core ctDNA deliverables built around the
@@ -26,6 +26,6 @@ Encoding: UTF-8
 RoxygenNote: 7.3.1
 VignetteBuilder: knitr
 NeedsCompilation: no
-Packaged: 2026-07-01 13:30:29 UTC; root
+Packaged: 2026-07-01 18:11:40 UTC; root
 Author: Hamid Nikbakht [aut, cre, cph]
 Maintainer: Hamid Nikbakht <hamid.nikbakht@noreply.github.com>
