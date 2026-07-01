@@ -5,7 +5,7 @@ Version: 0.75.3
 Authors@R: c(
     person(given = "Hamid", family = "Nikbakht",
            role = c("aut", "cre", "cph"),
-           email = "hamid.nikbakht@noreply.github.com")
+           email = "h.nikbakht@gmail.com")
   )
 Description: Standardised plotting, statistics, and multi-modal integration
     helpers for the eight core ctDNA deliverables built around the
