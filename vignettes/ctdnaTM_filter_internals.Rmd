@@ -1,0 +1,181 @@
+---
+title: "ctdnaTM filter system: internals"
+author: "Hamid Nikbakht"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{ctdnaTM filter system: internals}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>",
+                     message = FALSE, warning = FALSE)
+```
+
+This vignette explains how the filter system is put together. Read this if you want to understand what happens when you call `ctdna_variant_filter()`, how PASS/FAIL branch labels are computed, or how to extend the grammar with new rules or predicates.
+
+For a task-oriented tour of the public API, see `vignette("ctdnaTM_function_tour")`.
+
+# 1. Object shapes
+
+## 1.1 Atomic rule (`ctdna_rule`, type = `"atom"`)
+
+`rule(Column = value)` returns a `ctdna_rule` object with `type = "atom"`. Internally it's a small list:
+
+```{r}
+library(ctdnaTM)
+r <- rule(Gene = c("TP53","KRAS"))
+str(r, max.level = 1)
+```
+
+`col` = the target column; `value` = the RHS; `op` defaults to `%in%` when RHS is a vector, `==` for scalars. Operator strings supported by `rule()`:
+
+- `==`, `!=`, `<`, `<=`, `>`, `>=` — scalar comparisons
+- `%in%` — membership
+- `==col` — column-to-column equality (used for LGR intra-chromosomal / intra-genic checks)
+
+To use an operator explicitly:
+```{r}
+r <- rule(gnomAD_AF = list(op = "<", value = 0.01))
+r$op
+r$value
+```
+
+## 1.2 Combinators (type = `"and"`, `"or"`, `"not"`)
+
+`allOf()`, `anyOf()`, `not()` return rules with `type` set accordingly and children stored on `$children`. They're free to nest.
+
+```{r}
+r <- allOf(rule(Gene = "TP53"),
+           anyOf(rule_somatic(), rule_germline()),
+           not(rule_synonymous()))
+r$type
+length(r$children)
+```
+
+## 1.3 Filtering scheme (`ctdna_filtering_scheme`)
+
+A `ctdna_filtering_scheme` extends `ctdna_rule` with metadata:
+
+```{r}
+sch <- HRR14()
+str(sch, max.level = 1)
+```
+
+Fields:
+
+| field | purpose |
+|---|---|
+| `name` | scheme name (used in the criteria column, `visualized_scheme()`, catalog lookup) |
+| `description` | free text |
+| `category` | catalog category (`"gene_set"`, `"user"`, `"indication"`, etc.) |
+| `root` | the top-level rule (already ANDed with gates + branches) |
+| `scope` | rule used to decide "in-scope" for this scheme; defaults to the first positional rule |
+| `branches` | optional named list of rules used for branch labels in the criteria column |
+| `gates` | positional arguments to `create_filtering_scheme()` — the REQUIRE gates |
+
+# 2. The evaluator
+
+`.eval_rule(node, df)` recursively walks a rule tree and returns a logical mask of length `nrow(df)`. NA propagates through atoms (NA target column → NA in mask); combinators follow standard SQL-style NA logic (FALSE AND NA = FALSE, TRUE OR NA = TRUE).
+
+```{r}
+sim  <- ctdna_make_mock_study(n_patients = 30, seed = 1)
+prep <- ctdna_prepare(infinity_report = sim$infinity_report,
+                     adam = list(adsl = sim$clinical), verbose = FALSE)
+prep <- ctdna_sample_qc(prep, verbose = FALSE)
+
+# Evaluate directly on the variants frame
+mask <- ctdnaTM:::.eval_rule(rule_somatic(), prep$variants)
+table(mask, useNA = "ifany")
+```
+
+# 3. The filter engine
+
+`.filter_engine(df, filter_scheme, unmatched, record_criteria, ...)` in `R/filter_v2.R` is the internal orchestrator. `ctdna_variant_filter()` always calls it with `record_criteria = TRUE`, then decides which side effects to apply based on the `apply` / `explain` flags.
+
+The engine does the following per scheme:
+
+1. Compute **scope mask** — `.eval_rule(scheme$scope, df)`. If NULL, treat as TRUE everywhere.
+2. Compute **pass mask** — `.eval_rule(scheme, df)` on the full scheme (scope AND gates AND body). This is what the row needs to survive the whole scheme.
+3. If the scheme has `$branches` and `record_criteria = TRUE`: compute **per-branch masks** separately, each ANDed with the scheme's `$gates` (so the branch is only counted when the exclusion gates hold).
+
+Then per row:
+
+- If in no scheme's scope → `filtering_criteria` = NA.
+- If at least one in-scope scheme passes → `"PASS::"` prefix, listing the passing schemes; each scheme with `$branches` is annotated with the specific branch(es) that fired: `PASS::TSG_Tier1(somatic_nonsyn), TSG_Tier2(somatic_LoF)`.
+- If in scope but every in-scope scheme fails → `"FAIL::"` prefix listing those schemes (no branch info on the FAIL side).
+
+The final `apply = TRUE` step drops the FAIL rows and the scope-miss rows subject to `unmatched`. The `filtering_criteria` column is stripped from the live `prep$variants` and lives only on the explanation snapshot.
+
+# 4. Semantics reference
+
+| Row situation | criteria (in the snapshot) | apply=TRUE behaviour |
+|---|---|---|
+| Not in any scheme's scope | `NA` | `unmatched = "drop"` → drop; `"keep"` → keep |
+| In one or more scopes, at least one passes | `PASS::A(b1,b2), B(b3)` | keep |
+| In scope(s), every in-scope scheme fails | `FAIL::A, B` | drop |
+
+Multi-scheme evaluation is **OR across schemes**. If a row is in-scope for both `TSG_Tier1` and `TSG_Tier2` and passes `TSG_Tier1` but fails `TSG_Tier2`, the row survives (PASS::TSG_Tier1(...)) and the failing `TSG_Tier2` is not mentioned in the annotation.
+
+# 5. Adding a new built-in scheme
+
+Recipe:
+
+1. Write a constructor function in `R/rules_library.R` returning a scheme.
+2. Use `create_filtering_scheme(<gates>, ..., branches = list(name = expr, ...), name, description, category)`.
+3. Register in `.ctdna_builtin_schemes()` so string lookup works.
+4. Export in `NAMESPACE`.
+5. Add an `@rdname ctdna_rules_library` roxygen block.
+6. Add an `@examples` block so `?SchemeName` shows a runnable example.
+
+Example — a permissive KRAS-only scheme:
+
+```{r, eval = FALSE}
+scheme_kras <- function() {
+  create_filtering_scheme(
+    rule(Gene = "KRAS"),
+    not(rule_clinvar_benign()),
+    branches = list(
+      hotspot_G12       = allOf(rule_somatic(),
+                                rule(Mut_aa = c("p.G12C","p.G12D","p.G12V",
+                                                 "p.G12A","p.G12R","p.G12S"))),
+      hotspot_G13       = allOf(rule_somatic(),
+                                rule(Mut_aa = c("p.G13C","p.G13D"))),
+      hotspot_Q61       = allOf(rule_somatic(),
+                                rule(Mut_aa = c("p.Q61H","p.Q61K","p.Q61L","p.Q61R"))),
+      other_deleterious = allOf(rule_somatic(), rule_deleterious())),
+    name        = "scheme_kras",
+    description = "KRAS: annotate G12/G13/Q61 hotspots + other deleterious.",
+    category    = "gene_set",
+    overwrite   = TRUE)
+}
+```
+
+# 6. Extending the predicate library
+
+Add a new `rule_*` helper to `R/rules_library.R`:
+
+```{r, eval = FALSE}
+rule_high_impact <- function()
+  rule(Functional_impact = c("deleterious","damaging","high"))
+```
+
+Then export it in `NAMESPACE` and add an `@rdname ctdna_rules_library` doc block.
+
+# 7. Debugging tips
+
+- **Compare mask counts** — `sum(mask, na.rm = TRUE)` after each combinator to isolate which branch drops rows unexpectedly.
+- **Use `visualized_scheme()`** — dumps the scheme's full rule tree in a human-readable form. Confirms your intent matches what got compiled.
+- **Explain first, apply second** — run `ctdna_variant_filter(prep, sch, apply = FALSE, explain = TRUE)`, inspect `prep$filter_explanation$<sig>$filtering_criteria`, then run again with `apply = TRUE` once satisfied.
+- **Check `$scope`** — if a scheme drops way too many rows, its scope may not be what you think. `visualized_scheme()` prints scope on the REQUIRE line.
+
+# Session info
+
+```{r}
+sessionInfo()
+```
