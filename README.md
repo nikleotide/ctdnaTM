@@ -1,4 +1,4 @@
-<img src="images/logo.png" align="right" width="180" alt="ctdnaTM"/>
+<img src="inst/extdata/logo.png" align="right" width="180" alt="ctdnaTM"/>
 
 # ctdnaTM
 
