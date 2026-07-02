@@ -1,7 +1,5 @@
-<img src="inst/extdata/logo.png" align="right" width="180" alt="ctdnaTM"/>
-
 # ctdnaTM
-
+<img src="inst/extdata/logo.png" align="right" width="180" alt="ctdnaTM"/>
 Standardised plotting, statistics, and multi-modal integration helpers for the eight core ctDNA deliverables. Built around the Guardant Health Infinity platform, extensible to other vendors.
 
 ## Install
