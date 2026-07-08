@@ -14,264 +14,635 @@ vignette: >
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>",
-                     fig.width = 7, fig.height = 4.5, dpi = 100,
-                     message = FALSE, warning = FALSE)
+                      fig.width = 7, fig.height = 4.5, dpi = 100,
+                      message = FALSE, warning = FALSE)
 ```
 
-This vignette walks through every user-facing function in `ctdnaTM`, grouped by workflow stage. Every function is invoked at least once; every argument that has a non-default meaning is exercised. The mock study built by `ctdna_make_mock_study()` is used throughout so the whole document runs end-to-end without external data.
+Every exported function in `ctdnaTM`, grouped by purpose, each with a runnable example on mock data. For a linear tutorial see `vignette("ctdnaTM_walkthrough")`; for filter-engine internals see `vignette("ctdnaTM_filter_internals")`.
 
-# 1. Set up
+# 1. Setup & mock data
 
 ```{r}
 library(ctdnaTM)
-sim  <- ctdna_make_mock_study(n_patients = 60, seed = 3)
+sim  <- ctdna_make_mock_study(n_patients = 60, seed = 7)
+# oncoprint's wrap = "Indication" needs a lower-case `indication` column;
+# mock ships Cancertype so we copy it over.
+sim$clinical$indication <- sim$clinical$Cancertype
+
+prep <- ctdna_prepare(
+  infinity_report = sim$infinity_report,
+  adam            = list(adsl = sim$clinical, adtr = sim$adtr),
+  verbose         = FALSE)
+prep <- ctdna_sample_qc(prep, verbose = FALSE)
+setdiff(names(prep), "dictionary")
 ```
 
-`ctdna_make_mock_study()` returns a list with the same shape as a real Guardant Health Infinity delivery — `infinity_report` (variants), optional panel frames, and a simple `clinical` ADaM frame.
+`ctdna_make_mock_study(n_patients, seed, ...)` returns a named list with an Infinity report, clinical/adtr frames, and orthogonal-platform frames (`ihc`, `dnaseq`, `rnaseq`) — enough to exercise every function without a real dataset.
 
-# 2. Prepare and QC
+# 2. Data assembly
 
 ## 2.1 `ctdna_prepare()`
 
-Assembles a `ctdna_prep` object from an Infinity report plus any ADaM frames. In v0.73+, `ctdna_prepare()` no longer runs sample QC by default — `prep$variants` comes back raw.
-
-```{r}
-prep <- ctdna_prepare(
-  infinity_report = sim$infinity_report,
-  adam            = list(adsl = sim$clinical),
-  verbose         = FALSE)
-
-class(prep)
-names(prep)
-nrow(prep$variants)  # raw variants (pre-QC)
-```
-
-## 2.2 `ctdna_sample_qc()`
-
-Runs sample-level QC on `prep$samples`, drops failing samples, and cascades to `prep$variants` (variants of dropped samples are removed). Idempotent — calling it a second time drops nothing new.
-
-```{r}
-prep <- ctdna_sample_qc(prep, verbose = FALSE)
-nrow(prep$variants)  # after QC
-prep <- ctdna_sample_qc(prep, verbose = FALSE)
-nrow(prep$variants)  # unchanged on rerun
-```
-
-# 3. Variant filtering
-
-## 3.1 Grammar overview
-
-Every filter scheme is built from four combinators plus a library of predicates:
-
-- `rule(Column = value)` — atomic predicate. `value` can be a scalar, vector, or `list(op = "!=", value = ...)` for operators (`==`, `!=`, `<`, `<=`, `>`, `>=`, `%in%`, and `==col` for column-to-column comparisons).
-- `allOf(a, b, ...)` — AND.
-- `anyOf(a, b, ...)` — OR.
-- `not(x)` — NOT.
-
-Predicate helpers such as `rule_somatic()`, `rule_truncating()`, `rule_clinvar_path()` are shortcuts for common atomic rules.
-
-```{r}
-# Atomic + AND + OR + NOT
-r <- allOf(
-  rule(Gene = c("TP53","KRAS")),
-  not(rule_synonymous()),
-  anyOf(rule_somatic(), rule_germline()))
-class(r)
-```
-
-## 3.2 Built-in schemes
-
-`ctdnaTM` ships four biomarker schemes plus a permissive fallback, keyed by name:
-
-- `TSG_Tier1()` — most permissive TSG (TP53/RB1/PTEN). Any impactful somatic short variant, fusion, or deleterious LGR.
-- `TSG_Tier2()` — intermediate TSG (TP53/RB1/PTEN). Somatic LoF, ClinVar-P/LP missense/inframe, LOH or homozygous deletion, or somatic deleterious intra-chromosomal LGR.
-- `TSG_Tier3()` — most restrictive TSG (TP53/RB1/PTEN). Germline P/LP, somatic LoF, somatic ClinVar-P/LP + missense/inframe, LOH or homozygous deletion. No LGR, no fusion, no rare-P/LP-synonymous carve-in.
-- `HRR14()` — HRR biomarker on 14 HRR genes. ClinVar P/LP, truncating + rare + not-BRCA2-K3326X, homozygous deletion, or somatic deleterious intra-genic LGR.
-- `scheme_basic()` — GH Infinity "impactful alterations" ruleset applied to all genes.
-
-All four biomarker schemes drop ClinVar benign and CHIP unconditionally. Each scheme's body is broken into **named branches** so the `filtering_criteria` column tells you which branch fired (e.g. `PASS::TSG_Tier1(somatic_nonsyn)` rather than just `PASS::TSG_Tier1`).
-
-```{r}
-visualized_scheme(TSG_Tier1(), width = 76)
-```
-
-```{r}
-visualized_scheme(HRR14(), width = 76)
-```
-
-## 3.3 `ctdna_variant_filter()`
-
-The single entry point for variant filtering. Two mandatory flags decide what happens:
-
-| `apply` | `explain` | effect |
-|:-:|:-:|:--|
-| `TRUE`  | `TRUE`  | `prep$variants` filtered; annotated snapshot at `prep$filter_explanation$<sig>` |
-| `TRUE`  | `FALSE` | `prep$variants` filtered; no snapshot |
-| `FALSE` | `TRUE`  | `prep$variants` unchanged; snapshot only |
-| `FALSE` | `FALSE` | error (nothing to do) |
-
-Live `prep$variants` never carries the `filtering_criteria` column; that column lives only on the annotated snapshot.
-
-```{r}
-# Apply and explain in one call
-prep2 <- ctdna_variant_filter(prep, "TSG_Tier1",
-                              apply = TRUE, explain = TRUE, verbose = FALSE)
-nrow(prep2$variants)                                             # filtered
-nrow(prep2$filter_explanation$TSG_Tier1)                         # all rows, annotated
-table(prep2$filter_explanation$TSG_Tier1$filtering_criteria, useNA = "always")
-```
-
-Combining schemes — pass a vector of names or a list of schemes. Row passes if any in-scope scheme passes; the criteria column names every in-scope scheme that fired and, for schemes with named branches, which branch fired.
-
-```{r}
-prep3 <- ctdna_variant_filter(prep,
-  filter_scheme = c("TSG_Tier1","TSG_Tier2","HRR14"),
-  apply = TRUE, explain = TRUE, verbose = FALSE)
-
-names(prep3$filter_explanation)   # snapshot key = "TSG_Tier1_TSG_Tier2_HRR14"
-head(sort(table(prep3$filter_explanation[[1]]$filtering_criteria,
-                useNA = "ifany"), decreasing = TRUE), 6)
-# Typical labels:
-#   PASS::TSG_Tier1(somatic_nonsyn), TSG_Tier2(somatic_LoF)
-#   PASS::TSG_Tier1(deleterious_LGR)
-#   FAIL::TSG_Tier1, TSG_Tier2
-#   NA   (row in no scheme's scope)
-```
-
-## 3.4 `ctdna_create_scheme()`
-
-Thin builder for user schemes. Covers the flat AND/OR case with positive predicates. For anything more complex (negation, nesting) use `create_filtering_scheme()` with the full grammar.
-
-```{r}
-my <- ctdna_create_scheme(
-  name     = "mini_tsg",
-  genes    = c("TP53","RB1"),
-  criteria = c("somatic","truncating"),
-  combine  = "all",
-  overwrite = TRUE)
-
-prep4 <- ctdna_variant_filter(prep, "mini_tsg",
-                              apply = TRUE, explain = FALSE, verbose = FALSE)
-nrow(prep4$variants)
-```
-
-## 3.5 `create_filtering_scheme()` — the full grammar
-
-For schemes that need negation or nested logic. This is the low-level builder; `ctdna_create_scheme()` and every built-in scheme are wrappers around it.
-
-```{r}
-sch <- create_filtering_scheme(
-  rule(Gene = c("TP53","RB1","PTEN")),
-  not(rule_clinvar_benign()),
-  not(rule_ch()),
-  anyOf(
-    allOf(rule_germline(), rule_clinvar_path()),
-    allOf(rule_somatic(),
-          anyOf(rule_truncating(),
-                allOf(rule_missense(), rule_rare_001())))),
-  name = "custom_tsg",
-  description = "TSG: germline P/LP OR somatic LoF OR somatic rare missense.",
-  overwrite = TRUE)
-class(sch)
-```
-
-## 3.6 Scheme catalog helpers
-
-```{r}
-head(ctdna_filter_schemes_list(), 10)
-ctdna_filter_scheme_show("HRR14", print = FALSE)$name
-```
-
-Persistence — save a scheme to disk and reload it in a later session:
+The entry point. Accepts a Guardant Infinity report plus any ADaM frames, produces a `ctdna_prep` list with `$clinical / $samples / $variants / $assessments / $dictionary / $qc_removed`.
 
 ```{r, eval = FALSE}
-ctdna_filter_scheme_save(sch, file = "custom_tsg.rds")
-sch2 <- ctdna_filter_scheme_load("custom_tsg.rds")
+prep <- ctdna_prepare(
+  infinity_report = my_report,                                    # data.frame or list()-spec
+  adam            = list(adsl = adsl, adrs = adrs, adtr = adtr),  # union across frames
+  clinical        = NULL,                                         # alternative to adam=
+  tf_change       = NULL,                                         # optional per-sample TF change frame
+  panel_74        = NULL,                                         # optional 74-gene panel frame
+  panel_500       = NULL,                                         # optional 500-gene panel frame
+  methylation     = NULL,                                         # optional methylation frame
+  verbose         = TRUE)
 ```
 
-# 4. Genomic landscape plots
+Key behavior:
 
-## 4.1 `ctdna_oncoprint()`
+- **Verbatim variant construction.** `prep$variants` mirrors your Infinity report row-for-row, plus a `Baseline` boolean flag.
+- **Union merge for clinical.** Every frame in `adam` contributes patient IDs to `prep$clinical`. First non-NA value wins per column, in list order.
+- **No auto-QC.** Sample QC happens only when *you* call `ctdna_sample_qc()`.
+- **Any modality passed as a list-spec** — e.g. `infinity_report = list(data = df, patient_id_col = "SUBJID", maxvaf = "VAF_max")` — gets its rename hints applied so canonical names line up.
 
-Takes a `prep`, a named list of gene sets, and returns an oncoprint (ComplexHeatmap engine if installed, ggplot fallback otherwise). Baseline visit by default.
+## 2.2 `ctdna_prep_add()`
 
-```{r, fig.height = 4.5}
-# Add an Indication column so wrap works
-prep$adrs <- data.frame(
-  Patient_ID = prep$clinical$Patient_ID,
-  indication = rep(c("NSCLC","HNSCC","SCLC","mCRPC"),
-                   length.out = nrow(prep$clinical)))
+Attach any modality frame to an already-built prep. Useful for adding IHC, RNAseq, or a second sequencing panel after the fact.
 
-op <- ctdna_oncoprint(prep,
-        gene_sets     = list(TSG   = c("TP53","RB1","PTEN"),
-                             HRR14 = ctdna_gene_set("HRR14")),
-        filter_scheme = "TSG_Tier1",
-        engine        = "ggplot",
-        title         = "Baseline landscape by TSG / HRR14")
+```{r}
+prep <- ctdna_prep_add(prep, ihc     = sim$ihc)
+prep <- ctdna_prep_add(prep, dnaseq  = sim$dnaseq)
+# sim$rnaseq is a nested list (counts / tpm / sample_metadata);
+# pass the tpm matrix explicitly:
+prep <- ctdna_prep_add(prep, expression = sim$rnaseq$tpm)
+setdiff(names(prep), "dictionary")
+```
+
+## 2.3 `ctdna_platforms()`
+
+List every recognised platform-alias mapping — what canonical names ctdnaTM knows and what columns of each vendor's export it recognises.
+
+```{r}
+head(names(ctdna_platforms()))
+```
+
+# 3. QC & variant filtering
+
+## 3.1 `ctdna_sample_qc()`
+
+Applies sample-level QC criteria, cascades to variants tied to failed samples, archives removed rows.
+
+```{r}
+prep_qc <- ctdna_sample_qc(prep,
+                           sample_status = c("SUCCESS"),
+                           plasma_min    = 0,
+                           cfdna_min     = 0,
+                           verbose       = FALSE)
+sapply(prep_qc$qc_removed, function(x) if (is.null(x)) 0L else nrow(x))
+```
+
+Idempotent — running it twice does not double-cascade.
+
+## 3.2 `ctdna_variant_filter()`
+
+Applies one or more schemes to `prep$variants`. `apply` and `explain` are mandatory.
+
+```{r}
+prep <- ctdna_variant_filter(prep,
+                             filter_scheme = c("TSG_Tier1", "HRR14"),
+                             apply         = TRUE,
+                             explain       = TRUE,
+                             unmatched     = "drop",     # or "keep"
+                             verbose       = FALSE)
+nrow(prep$variants)
+```
+
+`unmatched` controls what happens to variants outside every scheme's scope:
+
+- `"drop"` — remove them (default when `apply = TRUE`).
+- `"keep"` — leave them in `prep$variants` as-is.
+
+Multiple filter runs stack in `prep$filter_explanation`, keyed by the concatenated scheme names:
+
+```{r}
+names(prep$filter_explanation)
+```
+
+# 4. Scheme grammar
+
+## 4.1 `rule()` — atomic predicate
+
+Simplest form: match a column against values.
+
+```{r}
+rule(Gene = c("TP53","BRCA1"))                       # match any of these
+rule(Somatic_status = "somatic")                     # single value
+```
+
+Predicate-function form (`rule(VAF_percentage = function(x) x > 5)`) is supported by the evaluator but doesn't have a printable label; use it for numeric-range gates and pair with an explicit `label = "VAF > 5"`.
+
+## 4.2 `allOf()` / `anyOf()` / `not()` — combinators
+
+```{r}
+allOf(rule(Gene = "TP53"), rule_somatic(), rule_truncating())      # AND
+anyOf(rule_frameshift(), rule_nonsense(), rule_splice_donor())     # OR
+not(rule_ch())                                                     # negation
+```
+
+`allOf` is aliased as `alt_all`, `anyOf` as `alt_any`, and there's a `alt_any_n(rules, n)` for "at least n of the rules pass".
+
+## 4.3 `ctdna_create_scheme()` — quick constructor
+
+For "gene list + criteria" schemes with no negation or branches:
+
+```{r}
+q <- ctdna_create_scheme(
+  name     = "quick_TSG",
+  genes    = c("TP53","RB1","PTEN"),
+  criteria = c("truncating","missense"),  # from: truncating, missense, clinvar_path, cnv_del, cnv_amp, lgr, fusion, somatic, germline, rare
+  combine  = "any")
+visualized_scheme(q)
+```
+
+## 4.4 `create_filtering_scheme()` — full grammar
+
+For everything else: negation, nested combinators, named branches, scope + gate + branch structure.
+
+```{r, eval = FALSE}
+create_filtering_scheme(
+  # scope
+  rule(Gene = c("TP53","RB1","PTEN")),
+
+  # gate (unconditional exclusion)
+  not(rule_ch()), not(rule_clinvar_benign()),
+
+  # branches (named alternatives; PASS if any branch matches)
+  branches = list(
+    germline_PLP = allOf(rule_germline(), rule_clinvar_path()),
+    somatic_LoF  = allOf(rule_somatic(),  rule_truncating())),
+
+  name        = "custom_TSG",
+  description = "Custom TSG scheme",
+  frozen      = FALSE,        # TRUE = schema-locked, can't be modified
+  overwrite   = TRUE)
+```
+
+## 4.5 `visualized_scheme()` — inspect
+
+Prints a tree of scope / gate / branches:
+
+```{r}
+visualized_scheme(TSG_Tier1())
+```
+
+## 4.6 `ctdna_test_scheme()` — dry-run against a prep
+
+Reports how many variants pass at each level, without modifying the prep.
+
+```{r}
+head(ctdna_test_scheme("TSG_Tier2", df = prep$variants))
+```
+
+# 5. Scheme catalog
+
+Schemes are persisted in an in-session catalog (and optionally a user-config file). Full CRUD:
+
+```{r}
+ctdna_filter_schemes_list()
+```
+
+- `ctdna_filter_scheme_get(name)` — retrieve one.
+- `ctdna_filter_scheme_show(name)` — pretty-print one.
+- `ctdna_filter_scheme_save(name, scheme, path = NULL)` — persist to disk.
+- `ctdna_filter_scheme_load(name, path = NULL)` — read from disk.
+- `ctdna_filter_scheme_delete(name)` — remove from catalog.
+- `ctdna_filter_reset_general()` — reset the catalog to built-ins.
+
+# 6. Landscape plots
+
+## 6.1 `ctdna_oncoprint()`
+
+Gene × patient heatmap with alteration glyphs.
+
+```{r, fig.height=6}
+op <- ctdna_oncoprint(
+  prep,
+  gene_sets     = list(TSG   = c("TP53","RB1","PTEN"),
+                       HRR14 = ctdna_gene_set("HRR14")),
+  visit         = "baseline",     # or a specific visit label
+  filter_scheme = NULL,           # NULL = no scheme filtering
+  wrap          = "Indication",   # facet by column name; NULL = no wrap
+  engine        = "auto",         # "ComplexHeatmap" or "ggplot"
+  title         = "Baseline landscape")
 op$plot
 ```
 
-## 4.2 `ctdna_alteration_grid()`
+Return object: `list(plot, patient_data, matrix, gene_sets, table)`.
 
-Alteration prevalence grid. Rows are gene sets, columns are the RECIST-derived response strata.
+## 6.2 `ctdna_alteration_grid()`
 
-Gene-set entries can be bare vectors (default: any-of) or wrapped with `alt_any()`, `alt_all()`, or `alt_any_n(n)` to change how multi-gene sets combine.
+Gene × outcome-group prevalence matrix.
 
-```{r, fig.height = 3.5}
-gr <- ctdna_alteration_grid(prep,
-        gene_sets = list(
-          any_TSG    = c("TP53","RB1","PTEN"),
-          all_TSG    = alt_all(c("TP53","RB1","PTEN")),
-          two_of_TSG = alt_any_n(c("TP53","RB1","PTEN"), n = 2)),
-        scheme    = "three",
-        title     = "TSG alteration prevalence by response")
+```{r, fig.height=4}
+gr <- ctdna_alteration_grid(
+  prep,
+  gene_sets = list(TSG   = c("TP53","RB1","PTEN"),
+                   HRR14 = ctdna_gene_set("HRR14")),
+  scheme    = "three",          # "two" = R/NR; "three" = R/NR/undefined; "four" = adds SD
+  wrap      = "Indication",
+  title     = "Prevalence by response")
 gr$plot
 ```
 
-# 5. Pipeline
+# 7. Trajectory plots
 
-`ctdna_pipeline()` runs every deliverable step whose input modalities are present. Result access is uniform: `res$<key>$plot`. A dry run reports what would execute.
+All work off `prep$samples` (per-visit) or `prep$assessments` (tumor size). Each function returns a ggplot object directly, except `ctdna_plot_longitudinal()` which returns a small list with `$plot` and a `$stats` frame.
+
+## 7.1 `ctdna_plot_baseline()`
+
+TF at baseline, grouped by dose. Handles `group_by`, `subgroup_by`, per-group Wilcoxon or Kruskal p-values, log-scale y, etc.
 
 ```{r}
-dry <- ctdna_pipeline(prep, dry_run = TRUE, verbose = FALSE)
-str(dry$skipped, max.level = 1)
+ctdna_plot_baseline(prep)
 ```
 
+## 7.2 `ctdna_plot_reduction()`
+
+TF change from baseline vs RECIST × dose.
+
 ```{r}
+ctdna_plot_reduction(prep)
+```
+
+## 7.3 `ctdna_plot_longitudinal()`
+
+Subject-level TF trajectories across visits.
+
+```{r}
+lon <- ctdna_plot_longitudinal(prep)
+lon$plot
+```
+
+## 7.4 `ctdna_plot_pct_change_by_dose_time()`
+
+%ΔTF grouped by dose × visit. Note: takes a per-sample **data.frame** as first argument, not `prep`.
+
+```{r, eval = FALSE}
+ctdna_plot_pct_change_by_dose_time(prep$samples)
+```
+
+## 7.5 `ctdna_plot_scatter()`
+
+Generic scatter with correlation stats. `x` / `y` can be raw column names or opts keys (e.g. `"maxvaf"` resolves to whatever column is set in `ctdna_opts("maxvaf")`).
+
+```{r}
+ctdna_plot_scatter(prep, x = "maxvaf", y = "methyl")
+```
+
+## 7.6 `ctdna_boxplot()`
+
+Generic boxplot with per-group p-values. `y` must be a numeric column of the target frame, `x` a categorical one.
+
+```{r}
+ctdna_boxplot(prep, y = "cfDNA_ng", x = "RECIST")
+```
+
+To filter/reorder x-axis categories, preprocess `prep$samples` (or whichever slot) with `filter()` + `factor(levels =)` before plotting — not `scale_x_discrete()` post-hoc.
+
+# 8. Cross-modality plots
+
+Each takes **two frames** (ctdna metrics + orthogonal platform data), not `prep`. Extract the two frames you need before plotting.
+
+## 8.1 `ctdna_plot_vs_tmb()`
+
+TF vs TMB. Both live in `prep$samples`.
+
+```{r, eval = FALSE}
+ctdna_plot_vs_tmb(prep$samples, prep$samples)
+```
+
+## 8.2 `ctdna_plot_vs_mutation()`
+
+TF vs tissue mutation status for a specific gene. Requires a `mut_df` frame with per-patient/gene mutation calls.
+
+```{r, eval = FALSE}
+ctdna_plot_vs_mutation(prep$samples, sim$dnaseq, gene = "TP53")
+```
+
+## 8.3 `ctdna_plot_vs_ihc()`
+
+TF vs an IHC marker score.
+
+```{r, eval = FALSE}
+ctdna_plot_vs_ihc(prep$samples, sim$ihc, marker = "PD-L1")
+```
+
+## 8.4 `ctdna_plot_vs_expression()`
+
+TF vs RNAseq expression of a specific gene.
+
+```{r, eval = FALSE}
+ctdna_plot_vs_expression(prep$samples, sim$rnaseq$tpm, gene = "TP53")
+```
+
+# 9. Statistics
+
+Helpers for computing and formatting p-values, correlation stats, and group tests. Most extract stats from a ggplot object; a few operate on raw vectors / frames.
+
+## 9.1 P-value labels — `ctdna_pval_label(p)`
+
+Given a ggplot returned by `ctdna_plot_baseline()` / `ctdna_plot_reduction()` / `ctdna_boxplot()`, extract the annotated p-values.
+
+```{r, eval = FALSE}
+p <- ctdna_plot_baseline(prep)
+ctdna_pval_label(p)
+```
+
+## 9.2 `scatter_stats(p)`
+
+Extract Pearson / Spearman / Kendall stats from a scatter plot.
+
+```{r}
+s <- ctdna_plot_scatter(prep, x = "maxvaf", y = "methyl")
+scatter_stats(s)
+```
+
+## 9.3 `longitudinal_stats(p)`
+
+Extract per-subject slope stats from a longitudinal plot.
+
+```{r, eval = FALSE}
+l <- ctdna_plot_longitudinal(prep)
+longitudinal_stats(l)
+```
+
+## 9.4 Pairwise Wilcoxon — `ctdna_pairwise_ranksum(data, value, group, method)`
+
+```{r}
+head(ctdna_pairwise_ranksum(prep$samples,
+                             value  = "cfDNA_ng",
+                             group  = "RECIST",
+                             method = "wilcox"))
+```
+
+## 9.5 Paired test — `ctdna_paired_test(...)`
+
+Paired Wilcoxon or paired t-test. Signature depends on version; see `?ctdna_paired_test`.
+
+## 9.6 Correlation test — `ctdna_cor_test(...)`
+
+Wrapped `cor.test()` with a tidy row output.
+
+## 9.7 Concordance / agreement
+
+- `ctdna_concordance(x, y)` — top-level agreement between two callers.
+- `ctdna_concordance_test(x, y)` — inferential version.
+- `ctdna_cohen_kappa(x, y)`, `ctdna_weighted_kappa(x, y)` — categorical agreement.
+- `concordance_stats(x, y)` — low-level stat calculator.
+
+## 9.8 `ctdna_metric_at(pred, truth, metric, at)`
+
+Evaluate a metric at a threshold.
+
+## 9.9 Summary and table
+
+```{r, eval = FALSE}
+ctdna_summary(prep)      # one-line rowcount summary
+```
+
+`ctdna_table(prep, slot, ...)` — quick frequency tabulation with sensible defaults.
+
+## 9.10 `ctdna_run_group_test()`
+
+Runs a per-group test and returns a tidy frame — used internally by plot functions.
+
+# 10. Themes, colors, and scales
+
+## 10.1 Theme
+
+`ctdna_theme(base_size = 12, ...)` — base theme applied by every ctdnaTM plot. Add to external ggplots to match style.
+
+```{r, eval = FALSE}
+library(ggplot2)
+ggplot(mtcars, aes(mpg, hp)) + geom_point() + ctdna_theme()
+```
+
+## 10.2 Color palettes
+
+`ctdna_colors()` returns the full palette registry (a large list of named palettes). `ctdna_dose_palette(levels)` builds a palette for an arbitrary dose vector.
+
+```{r, eval = FALSE}
+ctdna_colors()                             # inspect the palette registry
+ctdna_dose_palette(c("6 mg/kg", "8 mg/kg"))
+```
+
+## 10.3 ggplot scales
+
+- `ctdna_scale_dose()` / `ctdna_scale_dose_fill()` / `ctdna_scale_dose_shape()` — for a `Dose` aesthetic.
+- `ctdna_scale_recist()` / `ctdna_scale_recist_fill()` — for a `RECIST` aesthetic.
+
+Use just like `scale_color_manual()`:
+
+```{r, eval = FALSE}
+ggplot(prep$samples, aes(Visit_num, tumor_fraction, color = Dose)) +
+  geom_line() +
+  ctdna_scale_dose()
+```
+
+## 10.4 `ctdna_stratify_recist()`
+
+Collapse the 4-level RECIST column into 2-, 3-, or 4-level buckets (R/NR, R/NR/undefined, or CR-PR/SD/PD/undefined).
+
+```{r}
+ctdna_stratify_recist(prep$clinical$RECIST, recist_grouping = "three") |> table()
+```
+
+# 11. Utility functions
+
+## 11.1 `ctdna_compute_mr()`
+
+Molecular response classification per patient.
+
+## 11.2 `ctdna_floor_tf()`
+
+Impute below-detection TF values to a floor (default `1e-3`).
+
+## 11.3 `ctdna_gene_set()`
+
+Return a named gene set. Built-in sets: `HRR14`, `TSG`, `Cell_Cycle`, `MMR`, `PI3K`, `RTK`, `TP53_pathway`.
+
+```{r}
+ctdna_gene_set("HRR14")
+```
+
+## 11.4 `ctdna_alteration_types()`
+
+The canonical alteration-type vocabulary used by the oncoprint glyphs.
+
+```{r}
+ctdna_alteration_types()
+```
+
+## 11.5 `ctdna_ratio()`
+
+Compute a ratio with graceful `NA` handling.
+
+## 11.6 `ctdna_coerce()`
+
+Safe type coercion with `NA` propagation on failure.
+
+## 11.7 `ctdna_to_log2tpm()`
+
+Log2(TPM + 1) transformation for RNAseq expression.
+
+# 12. Multi-modal helpers
+
+## 12.1 `ctdna_assemble_modalities()`
+
+Combine several data-frames representing different modalities into a single long/wide frame keyed by `Patient_ID` and `Visit_name`.
+
+## 12.2 `ctdna_merge_modalities()`
+
+Join a modality frame to `prep$samples` on sample/patient/visit keys.
+
+## 12.3 Population frequency annotation
+
+- `ctdna_annotate_population_freq(prep)` — annotate `prep$variants` with population frequencies (gnomAD/1000G-style).
+- `ctdna_load_popfreq_cache(path)` / `ctdna_save_popfreq_cache(path)` — cache the pop-freq lookup between runs.
+
+# 13. Pipeline
+
+## 13.1 `ctdna_pipeline()`
+
+Runs every registered deliverable.
+
+```{r, eval = FALSE}
 res <- ctdna_pipeline(prep,
-         which     = c("oncoprint","alteration_grid"),
-         scheme    = "three",
-         gene_sets = list(TSG   = c("TP53","RB1","PTEN"),
-                          HRR14 = ctdna_gene_set("HRR14")),
-         engine    = "ggplot",
-         verbose   = FALSE)
-names(res)
+                      scheme        = "three",
+                      visit         = "baseline",
+                      wrap          = "Indication",
+                      gene_sets     = list(TSG = c("TP53","RB1","PTEN"),
+                                           HRR14 = ctdna_gene_set("HRR14")),
+                      filter_scheme = c("TSG_Tier1","HRR14"),
+                      engine        = "auto",
+                      opts          = list(oncoprint = list(title = "Custom title"),
+                                           vs_ihc    = list(skip = TRUE)),
+                      verbose       = FALSE)
 ```
 
-# 6. Reference: rule predicates
+## 13.2 `ctdna_pipeline_steps()`
 
-The rule library exports around 60 predicate helpers. The most common ones:
-
-- Somatic status: `rule_somatic()`, `rule_germline()`, `rule_ch()`
-- ClinVar: `rule_clinvar_path()`, `rule_clinvar_benign()`, `rule_clinvar_vus()`
-- Molecular consequence: `rule_truncating()`, `rule_missense()`, `rule_synonymous()`, `rule_nonsense()`, `rule_frameshift()`, `rule_inframe_indel()`, `rule_splice_acceptor()`, `rule_splice_donor()`
-- Variant type: `rule_is_SNV()`, `rule_is_Indel()`, `rule_is_CNV()`, `rule_is_Fusion()`, `rule_is_LGR()`
-- CNV subtypes: `rule_cnv_homozyg_del()`, `rule_cnv_loh_del()`, `rule_cnv_focal_amp()`, `rule_cnv_aneuploid_amp()`
-- LGR subtypes: `rule_lgr_deletion()`, `rule_lgr_tandem_duplication()`, `rule_lgr_inversion()`, `rule_is_LGR_deleterious()`
-- Population frequency: `rule_rare_001()`, `rule_rare_0001()`, `rule_common_001()`
-- Gene sets: `rule_genes_HRR14()`, `rule_genes_TSG()`, `rule_genes_RTK()`, `rule_genes_MMR()`
-- Indication: `rule_ind_NSCLC()`, `rule_ind_BRCA()`, `rule_ind_SCLC()`, `rule_ind_HNSCC()`, `rule_ind_CRC()`, `rule_ind_mCRPC()`, `rule_ind_GBM()`
-
-See `?ctdna_rules_library` for the complete list.
-
-# 7. Package configuration
+List every registered deliverable (11 total).
 
 ```{r}
-ctdna_opts("subject")           # column name for patient ID
-ctdna_opts("gene")              # column name for gene symbol
+ctdna_pipeline_steps()
 ```
 
-Options are set with `ctdna_opts(key = value, ...)` and can be persisted with `ctdna_opts_save()` / `ctdna_opts_load()`.
+## 13.3 `ctdna_run_pipeline()`
+
+Lower-level pipeline runner used internally by `ctdna_pipeline()`; can register custom pipeline steps.
+
+# 14. Configuration
+
+## 14.1 `ctdna_opts()`
+
+Read or set package-wide options.
+
+```{r}
+# ctdna_opts() with no args prints the full opts registry
+ctdna_opts("baseline")
+```
+
+## 14.2 `ctdna_opts_choices()`
+
+List the allowed values for enumerated options.
+
+## 14.3 `ctdna_opts_save()` / `ctdna_opts_load()`
+
+Persist / restore your option set (e.g. across R sessions).
+
+## 14.4 `ctdna_filter_opts()`
+
+Filter-engine options.
+
+# 15. Reference: predicate library
+
+Predicates organized by domain. Every one is a `ctdna_rule` object usable inside `allOf`/`anyOf`/`not`/`create_filtering_scheme`.
+
+## 15.1 Variant type
+
+`rule_is_SNV()`, `rule_is_Indel()`, `rule_is_CNV()`, `rule_is_Fusion()`, `rule_is_LGR()`, `rule_is_LGR_deleterious()`.
+
+## 15.2 Consequence
+
+`rule_missense()`, `rule_nonsense()`, `rule_frameshift()`, `rule_truncating()`, `rule_synonymous()`, `rule_inframe_indel()`, `rule_start_lost()`, `rule_stop_lost()`, `rule_promoter()`, `rule_splice_donor()`, `rule_splice_acceptor()`, `rule_splice_region()`, `rule_splice_event_mc()`.
+
+## 15.3 Somatic / germline / CH
+
+`rule_somatic()`, `rule_germline()`, `rule_ch()`.
+
+## 15.4 ClinVar / functional
+
+`rule_clinvar_path()`, `rule_clinvar_benign()`, `rule_clinvar_vus()`, `rule_clinvar_conflict()`, `rule_deleterious()`.
+
+## 15.5 CNV / SV
+
+`rule_cnv_amp()`, `rule_cnv_focal_amp()`, `rule_cnv_aneuploid_amp()`, `rule_cnv_loh_del()`, `rule_cnv_homozyg_del()`, `rule_amp_thresh(threshold)`, `rule_biallelic()`, `rule_lgr_deletion()`, `rule_lgr_inversion()`, `rule_lgr_tandem_duplication()`.
+
+## 15.6 Sample-level
+
+`rule_sample_success()`, `rule_sample_fail()`.
+
+## 15.7 Population frequency
+
+`rule_common_001()`, `rule_rare_001()`, `rule_rare_0001()`.
+
+## 15.8 Special
+
+`rule_reversion()`, `rule_BRCA2_K3326()`.
+
+## 15.9 Gene set
+
+`rule_genes_TSG()`, `rule_genes_HRR14()`, `rule_genes_MMR()`, `rule_genes_PI3K()`, `rule_genes_RTK()`, `rule_genes_Cell_Cycle()`, `rule_genes_TP53_pathway()`.
+
+## 15.10 Indication-specific
+
+`rule_ind_BRCA()`, `rule_ind_CRC()`, `rule_ind_GBM()`, `rule_ind_HNSCC()`, `rule_ind_NSCLC()`, `rule_ind_SCLC()`, `rule_ind_mCRPC()`.
+
+# 16. Package meta
+
+## 16.1 `ctdna_help()`
+
+Open the help index.
+
+## 16.2 `ctdna_logo()`
+
+Path to the shipped hex logo.
+
+```{r}
+ctdna_logo()
+```
+
+Use in Rmd:
+
+```{r, eval = FALSE}
+knitr::include_graphics(ctdna_logo())
+```
+
+## 16.3 `ctdna_methods()`
+
+Enumerate every registered analysis method (used by the pipeline).
+
+## 16.4 `ctdna_register_method()`
+
+Register a custom method into the pipeline registry.
+
+## 16.5 `ctdna_check_for_updates()`
+
+Check the CRAN / GitHub release for a newer version.
+
+## 16.6 `ctdna_cleanup()`
+
+Clear session-scoped ctdnaTM caches.
 
 # Session info
 
