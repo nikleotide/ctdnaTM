@@ -1,0 +1,237 @@
+---
+title: "ctdnaTM — Filter system walkthrough (v0.75.10)"
+author: "Hamid Nikbakht"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    code_folding: show
+---
+
+```{r logo, echo = FALSE, results = "asis"}
+logo_path <- system.file("extdata", "logo.png", package = "ctdnaTM")
+if (nzchar(logo_path) && file.exists(logo_path))
+  cat(sprintf('<img src="%s" style="float:right; width:120px; margin-left:1em" alt="ctdnaTM logo"/>\n\n', logo_path))
+```
+
+```{r setup, include = FALSE}
+rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+if (!requireNamespace("ctdnaTM", quietly = TRUE))
+  install.packages(
+    "/mnt/code/Hn/lib/ctdnaTM_0.43.8.tar.gz",
+    repos = NULL, type = "source")
+library(ctdnaTM)
+```
+
+# About this document
+
+Walkthrough of the **ctdnaTM filter system**. The filter system itself
+is unchanged in v0.75.10 (no behavioural changes to rules, schemes, or
+`ctdna_filter_apply()`); this Rmd is the same content as the v0.38.0
+walkthrough with the install URL updated.
+
+```{r data_setup}
+sim  <- ctdna_make_mock_study(n_patients = 60, seed = 22)
+prep <- ctdna_prepare(sim, verbose = FALSE)
+gen  <- prep$genomic
+cat("Genomic rows:", nrow(gen), "\n")
+```
+
+---
+
+# 1. The two stages of `ctdna_filter_apply()`
+
+```r
+ctdna_filter_apply(df,
+                   filter_scheme    = scheme_basic(),    # NULL = no variant filter
+                   sample_qc_enable = NULL)              # NULL = use opts default
+```
+
+Two independent stages run in this order:
+
+| Stage | Controlled by | Reads from |
+|---|---|---|
+| **Stage 0** — Sample QC | `sample_qc_enable` arg (or `ctdna_opts("sample_qc_filter")` fallback) | `Sample_status`, cfDNA / plasma volume minimums |
+| **Stage 1** — Variant filter | `filter_scheme` arg | The full rule language on each alteration row |
+
+## Three useful modes
+
+```{r}
+# Mode 1: QC only (no variant filtering)
+df_qc <- ctdna_filter_apply(gen, filter_scheme = NULL,
+                              sample_qc_enable = TRUE)
+nrow(df_qc)
+
+# Mode 2: Variant filter only (skip QC)
+df_var <- ctdna_filter_apply(gen, filter_scheme = scheme_basic(),
+                               sample_qc_enable = FALSE)
+nrow(df_var)
+
+# Mode 3 (default): both stages
+df_both <- ctdna_filter_apply(gen, filter_scheme = scheme_basic())
+nrow(df_both)
+```
+
+The returned frame carries `attr(., "ctdna_filter_used")` documenting
+which mode ran.
+
+```{r}
+attr(df_both, "ctdna_filter_used")
+```
+
+---
+
+# 2. The rule language
+
+A rule is a function that takes a data frame and returns a logical
+vector. The library ships ~80 named rules organised by category.
+
+## Building rules
+
+```{r}
+# A column-equality rule
+my_rule <- rule(column = "Gene", op = "==", value = "TP53")
+
+# A built-in predicate
+rule_clinvar_path()
+
+# Compose with combinators
+allOf(rule_clinvar_path(), rule_truncating())
+anyOf(rule_clinvar_path(), rule_clinvar_vus())
+`not`(rule_synonymous())
+```
+
+## Evaluating a rule
+
+The bare-bones path:
+
+```{r}
+mask <- ctdnaTM:::.eval_rule(rule_clinvar_path(), gen)
+sum(mask)
+```
+
+The user-facing path:
+
+```{r}
+df_path <- ctdna_filter_apply(gen, filter_scheme = rule_clinvar_path(),
+                                 sample_qc_enable = FALSE)
+nrow(df_path)
+```
+
+---
+
+# 3. Rules by category
+
+| Category | Examples |
+|---|---|
+| **Variant type** | `rule_is_SNV()`, `rule_is_Indel()`, `rule_is_CNV()`, `rule_is_Fusion()`, `rule_is_LGR()` |
+| **Consequence** | `rule_missense()`, `rule_nonsense()`, `rule_frameshift()`, `rule_synonymous()`, `rule_splice_donor()`, `rule_splice_acceptor()`, `rule_splice_region()`, `rule_splice_event_mc()`, `rule_inframe_indel()`, `rule_start_lost()`, `rule_stop_lost()`, `rule_promoter()`, `rule_truncating()` |
+| **ClinVar** | `rule_clinvar_path()`, `rule_clinvar_benign()`, `rule_clinvar_vus()`, `rule_clinvar_conflict()` |
+| **Origin** | `rule_germline()`, `rule_somatic()`, `rule_ch()` (clonal haematopoiesis) |
+| **Frequency** | `rule_common_001()`, `rule_rare_001()`, `rule_rare_0001()` |
+| **Gene sets** | `rule_genes_HRR14()`, `rule_genes_TSG()`, `rule_genes_PI3K()`, `rule_genes_RTK()`, `rule_genes_MMR()`, `rule_genes_Cell_Cycle()`, `rule_genes_TP53_pathway()` |
+| **Indication** | `rule_ind_BRCA()`, `rule_ind_NSCLC()`, `rule_ind_SCLC()`, `rule_ind_CRC()`, `rule_ind_HNSCC()`, `rule_ind_GBM()`, `rule_ind_mCRPC()` |
+| **CNV specifics** | `rule_cnv_amp()`, `rule_cnv_focal_amp()`, `rule_cnv_aneuploid_amp()`, `rule_cnv_homozyg_del()`, `rule_cnv_loh_del()`, `rule_amp_thresh()`, `rule_biallelic()` |
+| **LGR specifics** | `rule_lgr_deletion()`, `rule_lgr_inversion()`, `rule_lgr_tandem_duplication()`, `rule_is_LGR_deleterious()` |
+| **Sample** | `rule_sample_success()`, `rule_sample_fail()` |
+| **Special** | `rule_deleterious()`, `rule_reversion()`, `rule_BRCA2_K3326()` |
+
+---
+
+# 4. Pre-built schemes
+
+## `scheme_basic()`
+
+Cancer-actionable alterations: somatic + impactful + filter on
+suspected germline / CH / synonymous.
+
+```{r}
+df_basic <- ctdna_filter_apply(gen, filter_scheme = scheme_basic(),
+                                 sample_qc_enable = FALSE)
+nrow(df_basic)
+```
+
+## `scheme_HRR()`
+
+HRR-gene focus: HRR14 panel + ClinVar-pathogenic / truncating /
+LGR-deleterious / known reversions.
+
+```{r}
+df_hrr <- ctdna_filter_apply(gen, filter_scheme = scheme_HRR(),
+                               sample_qc_enable = FALSE)
+nrow(df_hrr)
+```
+
+## `scheme_TSG()`
+
+Tumor-suppressor focus.
+
+```{r}
+df_tsg <- ctdna_filter_apply(gen, filter_scheme = scheme_TSG(),
+                               sample_qc_enable = FALSE)
+nrow(df_tsg)
+```
+
+---
+
+# 5. Visualizing a scheme
+
+```{r eval = FALSE}
+visualized_scheme(scheme_basic())     # ASCII tree
+ctdna_filter_scheme_show(scheme_HRR()) # detailed printout
+```
+
+---
+
+# 6. Scheme management
+
+| Function | Purpose |
+|---|---|
+| `ctdna_filter_schemes_list()` | List saved schemes |
+| `ctdna_filter_scheme_get()` | Retrieve a saved scheme |
+| `ctdna_filter_scheme_save()` | Persist a scheme to disk |
+| `ctdna_filter_scheme_load()` | Load a scheme from disk |
+| `ctdna_filter_scheme_delete()` | Remove a saved scheme |
+| `create_filtering_scheme()` | Builder helper |
+| `ctdna_test_scheme()` | Run sanity tests on a scheme |
+
+---
+
+# 7. Filter options
+
+`ctdna_filter_opts()` exposes the gnomAD-rule defaults, the default
+sample-QC behaviour, and other knobs.
+
+```{r}
+ctdna_filter_opts()
+```
+
+Reset to package defaults:
+
+```{r eval = FALSE}
+ctdna_filter_reset_general()
+```
+
+---
+
+# 8. The visit-filtering question (important)
+
+`scheme_basic()` and the other variant filters do NOT filter by
+`Visit_name`. The "alterations only at C1D1" behaviour comes from the
+upstream assembly step `.gh_build_genomic()` in `R/platforms.R`,
+which is by design for GH Infinity (variant calls happen once at
+baseline; on-treatment visits use methylation / TF tracking).
+
+To analyse longitudinal data, look at `prep$ctdna` (longitudinal
+TF / methylation), not `prep$genomic` (baseline-only variant calls).
+
+---
+
+# Session info
+
+```{r session, echo = FALSE}
+sessionInfo()
+```
