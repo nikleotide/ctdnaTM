@@ -908,6 +908,8 @@ print.ctdna_concordance_oncoprint <- function(x, ...) {
     draw_args <- list(object = x$plot,
                       merge_legend = TRUE,
                       auto_adjust = FALSE,
+                      annotation_legend_side = "right",
+                      heatmap_legend_side    = "right",
                       padding = grid::unit(c(8, 8, 8, 8), "mm"))
     if (!is.null(x$ht_gap)) draw_args$ht_gap <- x$ht_gap
     if (!is.null(x$extra_legends))
