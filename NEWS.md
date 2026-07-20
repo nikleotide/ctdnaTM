@@ -1,3 +1,94 @@
+# ctdnaTM 0.76.0
+
+## New — file-tree reader for multi-kind dnaseq layouts
+
+* **`dnaseq_create()`** (exported) — assembles a canonical dnaseq
+  `data.frame` from one or more directory trees. Handles the three
+  common on-disk layouts in one call: (1) everything combined per
+  sample, (2) split by kind (SNV/Indel vs. all-CNV), (3) split by event
+  (one file each for AMP / DEL / LOH / FUSION / LGR).
+* Each `regex_*` argument accepts either a bare glob or a
+  `list(loc, pattern)` — different alteration kinds can live under
+  completely different directory trees.
+* Rows read via kind-specific regexes (`regex_amp`, `regex_del`,
+  `regex_loh`, `regex_focal_amp`, `regex_fusion`, `regex_lgr`) are
+  stamped with the correct canonical `Variant_type` / `CNV_type` so
+  the downstream classifier + oncoprint pick them up without any
+  further code changes.
+* `Source_kind` column added to output for auditability (tells you
+  which regex each row came from).
+* `ctdna_prepare()` and `ctdna_prep_add()` accept the extended dnaseq
+  spec inline, e.g.:
+  ```r
+  ctdna_prepare(
+    infinity_report = inf,
+    dnaseq = list(loc       = "/study/dnaseq/snv",
+                  regex_snv = "*_snv.tsv",
+                  regex_amp = list(loc = "/study/dnaseq/cnv",
+                                   pattern = "*_AMP.tsv"),
+                  regex_del = list(loc = "/study/dnaseq/cnv",
+                                   pattern = "*_DEL.tsv")),
+    adam = adsl)
+  ```
+* Back-compat: the older `list(loc, regex)` shape maps to `regex_all`
+  and continues to work.
+
+## New — dnaseq alteration-type dictionary
+
+* **`dnaseq_dict()`** (exported) — canonical mapping from raw vendor
+  strings to ctdnaTM's alteration-type universe used by every oncoprint
+  / concordance / stats function. Three sub-dictionaries: `variant_type`,
+  `molecular_consequence`, `cnv_type`. API mirrors `ctdna_opts()`:
+  ```r
+  dnaseq_dict()                                        # list all
+  dnaseq_dict("variant_type")                          # sub-dict
+  dnaseq_dict("molecular_consequence.missense")        # one entry
+  dnaseq_dict(molecular_consequence.missense = "MyVendor_MSs")  # append
+  ```
+* **`dnaseq_dict_add()`**, **`dnaseq_dict_reset()`**,
+  **`dnaseq_dict_lookup()`** — companion helpers.
+* Matching is **case-insensitive** and normalises
+  whitespace/underscore/dash, so `"stop_gained"`, `"Stop Gained"`,
+  `"STOP-GAINED"` all match. Combined consequences with `+` separator
+  (e.g. `"frameshift_variant+splice_donor_variant+intron_variant"`)
+  are split, each part looked up, and the MOST-DAMAGING component
+  wins via a fixed priority order.
+* Shipped defaults cover all 52 real-world `Variant_Effect` strings
+  observed in production dnaseq data, plus `AMP` / `DEL` in CNA Type
+  and `NONE` / `SILENT` / `MISSENSE` / `NONSENSE` in Functional_Class.
+* **Automatic normalisation in `ctdna_prepare()` and
+  `ctdna_prep_add()`** — the internal `.prep_dnaseq()` now runs
+  `.dnaseq_dict_apply()` on every dnaseq frame before it lands in
+  `prep$dnaseq`. Raw vendor values are preserved as `Variant_type_raw`,
+  `Molecular_consequence_raw`, `CNV_type_raw` columns for auditability.
+  Canonical values land in the standard-named columns that
+  `.oncoprint_classify()` reads.
+
+## New — ctDNA vs Tissue concordance oncoprint
+
+* **`ctdna_concordance_oncoprint_core()`** (exported) — the transposed
+  variant of `ctdna_oncoprint()` for paired ctDNA + Tissue analysis.
+  Rows are patient pairs (each patient's ctDNA row directly above its
+  Tissue row). Top annotation per panel: two side-by-side stacked
+  alteration bars per gene, one for ctDNA and one for Tissue, each with
+  its own % label using its own sample count as denominator. Right
+  annotation per panel: per-patient Jaccard concordance bar with a
+  perpendicular n-altered actual-count scale line.
+* Panel title, gene-set annotation strip, left patient annotations
+  (Dose, RECIST), and gene column names at the bottom all match the
+  original `ctdna_oncoprint()` layout, just transposed.
+* Alteration classes inherit LGR at 75% cell height, thin classes
+  (Missense/Truncating/InFrame/Promoter) at 33%, CNV/Fusion at full
+  cell, z-order CNV → LGR → Truncating → SNV top from the shared
+  `.oncoprint_alter_fun`.
+
+## Removed
+
+* `ctdna_opts("dnaseq_loc")` and `ctdna_opts("dnaseq_regex")` — the
+  options-driven fallback for dnaseq tree reading. Pass tree specs
+  inline via `ctdna_prepare(dnaseq = list(...))` instead. RNAseq
+  equivalents (`rnaseq_loc`, `rnaseq_regex`) are unchanged.
+
 # ctdnaTM 0.75.10
 
 ## New

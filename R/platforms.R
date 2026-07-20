@@ -1257,6 +1257,10 @@
 
 .prep_dnaseq <- function(df, c_subj) {
   if (!is.data.frame(df)) return(df)
+  # v0.76.0: normalize vendor strings via the shared dnaseq_dict() before
+  # the frame lands in prep$dnaseq. Runs for both ctdna_prepare() and
+  # ctdna_prep_add(). Original values kept in *_raw companion columns.
+  df <- .dnaseq_dict_apply(df, verbose = TRUE)
   df
 }
 

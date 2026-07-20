@@ -625,38 +625,60 @@ ctdna_prepare <- function(infinity_report                       = NULL,
     args[setdiff(names(bundle), names(args))] <- bundle[setdiff(names(bundle), names(args))]
   }
 
-  # ---- v0.75.10: tree-reader spec expansion for dnaseq / rnaseq ----
-  # If a modality is passed as list(loc = ..., regex = ...), call the
-  # multi-file reader and replace the list with the resulting data.frame.
-  # Also honors ctdna_opts("<modality>_loc") + ctdna_opts("<modality>_regex")
-  # when the modality slot was not provided by the user.
-  .is_tree_spec <- function(x) {
+  # ---- v0.76.0: tree-reader spec expansion --------------------------------
+  # dnaseq: any list(loc, regex, regex_snv, regex_amp, regex_del, ...) is
+  #         forwarded to dnaseq_create() which handles the three on-disk
+  #         layouts (combined, split-by-kind, split-by-event). The old
+  #         list(loc, regex) shape stays supported via regex_all.
+  #         The ctdna_opts("dnaseq_loc") / ("dnaseq_regex") fallback was
+  #         removed in v0.76.0 — dnaseq tree reading is now spec-only.
+  # rnaseq: unchanged — still accepts list(loc, regex) and still honours
+  #         ctdna_opts("rnaseq_loc") / ("rnaseq_regex").
+  .is_dnaseq_tree_spec <- function(x) {
+    is.list(x) && !is.data.frame(x) &&
+      any(c("loc", "regex",
+             "regex_all", "regex_snv", "regex_cnv",
+             "regex_amp", "regex_focal_amp",
+             "regex_del", "regex_loh",
+             "regex_fusion", "regex_lgr") %in% names(x))
+  }
+  .is_rnaseq_tree_spec <- function(x) {
     is.list(x) && !is.data.frame(x) &&
       all(c("loc","regex") %in% names(x))
   }
-  for (mnm in intersect(c("dnaseq","rnaseq"), names(args))) {
-    m <- args[[mnm]]
-    if (.is_tree_spec(m)) {
-      if (isTRUE(verbose))
-        message(sprintf("ctdna_prepare: reading %s from tree at %s ...",
-                         mnm, m$loc))
-      args[[mnm]] <- .ctdna_read_delimited_tree(
-        loc = m$loc, regex = m$regex, modality = mnm, verbose = verbose)
+  if ("dnaseq" %in% names(args) && .is_dnaseq_tree_spec(args$dnaseq)) {
+    m <- args$dnaseq
+    # Back-compat: old list(loc, regex) becomes loc + regex_all
+    if (!is.null(m$regex) && is.null(m$regex_all)) {
+      m$regex_all <- m$regex
     }
+    m$regex <- NULL
+    if (isTRUE(verbose))
+      message(sprintf("ctdna_prepare: assembling dnaseq via dnaseq_create() ..."))
+    args$dnaseq <- do.call(dnaseq_create,
+                            c(m, list(verbose = verbose)))
   }
-  for (mnm in c("dnaseq","rnaseq")) {
-    if (mnm %in% names(args)) next
-    loc_v <- tryCatch(ctdna_opts(paste0(mnm, "_loc"),   default = NULL),
+  if ("rnaseq" %in% names(args) && .is_rnaseq_tree_spec(args$rnaseq)) {
+    m <- args$rnaseq
+    if (isTRUE(verbose))
+      message(sprintf("ctdna_prepare: reading rnaseq from tree at %s ...",
+                       m$loc))
+    args$rnaseq <- .ctdna_read_delimited_tree(
+      loc = m$loc, regex = m$regex, modality = "rnaseq", verbose = verbose)
+  }
+  # rnaseq-only opts fallback (dnaseq opts-fallback removed in v0.76.0)
+  if (!("rnaseq" %in% names(args))) {
+    loc_v <- tryCatch(ctdna_opts("rnaseq_loc",   default = NULL),
                        error = function(e) NULL)
-    rgx_v <- tryCatch(ctdna_opts(paste0(mnm, "_regex"), default = NULL),
+    rgx_v <- tryCatch(ctdna_opts("rnaseq_regex", default = NULL),
                        error = function(e) NULL)
     if (!is.null(loc_v) && !is.null(rgx_v) &&
          nzchar(loc_v) && nzchar(rgx_v)) {
       if (isTRUE(verbose))
-        message(sprintf("ctdna_prepare: reading %s from opts-configured tree %s ...",
-                         mnm, loc_v))
-      args[[mnm]] <- .ctdna_read_delimited_tree(
-        loc = loc_v, regex = rgx_v, modality = mnm, verbose = verbose)
+        message(sprintf("ctdna_prepare: reading rnaseq from opts-configured tree %s ...",
+                         loc_v))
+      args$rnaseq <- .ctdna_read_delimited_tree(
+        loc = loc_v, regex = rgx_v, modality = "rnaseq", verbose = verbose)
     }
   }
 
@@ -856,6 +878,27 @@ ctdna_prep_add <- function(prep, ..., verbose = TRUE) {
     stop("ctdna_prep_add: pass exactly one named modality, e.g. rnaseq = mat.",
          call. = FALSE)
   c_subj <- .o("subject"); c_gene <- .o("gene"); c_expr <- .o("expression")
+  # v0.76.0: if a dnaseq/wes slot arrives as a tree spec, expand via
+  # dnaseq_create() before handing off to .prep_dnaseq().
+  .is_dnaseq_tree_spec <- function(x) {
+    is.list(x) && !is.data.frame(x) &&
+      any(c("loc", "regex",
+             "regex_all", "regex_snv", "regex_cnv",
+             "regex_amp", "regex_focal_amp",
+             "regex_del", "regex_loh",
+             "regex_fusion", "regex_lgr") %in% names(x))
+  }
+  for (nm in intersect(c("dnaseq","wes"), names(new))) {
+    if (.is_dnaseq_tree_spec(new[[nm]])) {
+      m <- new[[nm]]
+      if (!is.null(m$regex) && is.null(m$regex_all)) m$regex_all <- m$regex
+      m$regex <- NULL
+      if (isTRUE(verbose))
+        message(sprintf("ctdna_prep_add: assembling '%s' via dnaseq_create() ...",
+                         nm))
+      new[[nm]] <- do.call(dnaseq_create, c(m, list(verbose = verbose)))
+    }
+  }
   qs <- attr(prep, "qc_state")
   for (nm in names(new)) {
     x <- new[[nm]]
