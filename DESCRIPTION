@@ -1,7 +1,7 @@
 Package: ctdnaTM
 Type: Package
 Title: ctDNA Deliverables
-Version: 0.76.0
+Version: 0.76.1
 Authors@R: c(
     person(given = "Hamid", family = "Nikbakht",
            role = c("aut", "cre", "cph"),

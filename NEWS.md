@@ -1,3 +1,22 @@
+# ctdnaTM 0.76.1
+
+## Fix — gene names now render on `ctdna_concordance_oncoprint_core()`
+
+* On real data (longer gene names like `SMARCA4`, `RAD51B`, `BARD1`,
+  `TERT_promoter`), the gene-column labels at the bottom of the last
+  panel were being visually covered by the gene-set (TSG / HRR) annotation
+  strip. Root cause: ComplexHeatmap's built-in `show_column_names = TRUE`
+  on a Heatmap that is followed by another `HeatmapAnnotation` in a
+  `%v%` stack has a layout race that even `auto_adjust = FALSE` and
+  extra `heatmap_height` slack don't resolve.
+* v0.76.1 draws gene names as an explicit `HeatmapAnnotation` stack
+  element (using `anno_text`) inserted between the last heatmap panel
+  and the gene-set strip. Both now coexist with a small visual gap and
+  neither can cover the other regardless of gene-name length.
+* New parameter: **`show_gene_set_annotation`** (default `TRUE`) — set
+  to `FALSE` to suppress the bottom TSG/HRR strip entirely without
+  losing gene names.
+
 # ctdnaTM 0.76.0
 
 ## New — file-tree reader for multi-kind dnaseq layouts
