@@ -30,6 +30,7 @@ ctdna_concordance_oncoprint_core <- function(
     show_all_patients  = TRUE,
     show_patient_names = TRUE,
     show_freq_bar      = TRUE,
+    show_gene_set_annotation = TRUE,
     engine             = c("auto", "complexheatmap", "ggplot"),
     title              = NULL,
     subtitle           = NULL,
@@ -568,11 +569,9 @@ ctdna_concordance_oncoprint_core <- function(
       column_gap           = if (!is.null(row_split)) grid::unit(3, "mm")
                               else grid::unit(0.5, "mm"),
       width                = col_w * ncol(t_sub),
-      heatmap_height       = row_h * nrow(t_sub) +
-                              (if (is_last) grid::unit(20, "mm")   # room for gene names at bottom
-                               else grid::unit(0, "mm")),
+      heatmap_height       = row_h * nrow(t_sub),
       show_row_names       = isTRUE(show_patient_names),
-      show_column_names    = is_last,
+      show_column_names    = FALSE,   # v0.76.1 — drawn via explicit stack element below
       show_pct             = FALSE,
       remove_empty_columns = FALSE,
       show_heatmap_legend  = FALSE)
@@ -683,7 +682,8 @@ ctdna_concordance_oncoprint_core <- function(
     # -- Gene-set annotation built ONCE, ONLY at the bottom --------------
     gene_set_bottom_anno <- NULL
     set_names <- names(resolved)
-    if (length(set_names) >= 1L && !identical(sort_genes, "within_set") &&
+    if (isTRUE(show_gene_set_annotation) &&
+        length(set_names) >= 1L && !identical(sort_genes, "within_set") &&
         !(length(set_names) == 1L && set_names[1] == "All genes")) {
       set_pal <- c("#377EB8","#4DAF4A","#77EDDD","#E41A1C",
                    "#984EA3","#FF7F00","#A65628","#F781BF",
@@ -738,6 +738,22 @@ ctdna_concordance_oncoprint_core <- function(
       kind[length(stack_list)] <- "heatmap"
     }
     if (!is.null(gene_set_bottom_anno)) {
+      # v0.76.1: draw gene names via an explicit anno_text stack element
+      # ABOVE the gene-set strip so the two never collide. Column names
+      # via show_column_names on the Heatmap itself have a layout race
+      # with the following annotation strip that CH doesn't resolve.
+      gene_names_anno <- ComplexHeatmap::HeatmapAnnotation(
+        genes = ComplexHeatmap::anno_text(
+          ordered_genes,
+          gp       = grid::gpar(fontsize = 9),
+          rot      = 90,
+          just     = "right",
+          location = grid::unit(1, "npc")),
+        which                = "column",
+        show_annotation_name = FALSE,
+        annotation_height    = grid::unit(20, "mm"))
+      stack_list[[length(stack_list) + 1L]] <- gene_names_anno
+      kind[length(stack_list)] <- "genelabel"
       stack_list[[length(stack_list) + 1L]] <- gene_set_bottom_anno
       kind[length(stack_list)] <- "geneset"
     }
@@ -745,17 +761,20 @@ ctdna_concordance_oncoprint_core <- function(
     obj <- Reduce(ch_vcat, stack_list)
 
     # ht_gap between consecutive elements:
-    #   freq -> heatmap  : 0mm   (freq attaches to top of its panel body)
-    #   heatmap -> freq  : 5mm   (visual separation between panels)
-    #   heatmap -> geneset: 3mm  (small gap before final gene-set strip)
+    #   freq       -> heatmap   : 0mm   (freq attaches to top of its panel)
+    #   heatmap    -> freq      : 5mm   (visual separation between panels)
+    #   heatmap    -> genelabel : 2mm   (names hug the bottom of last panel)
+    #   genelabel  -> geneset   : 4mm   (small visual separation)
     ht_gap_custom <- NULL
     if (length(stack_list) > 1L) {
       gaps <- vapply(seq_len(length(stack_list) - 1L), function(i) {
         this_k <- kind[i]; next_k <- kind[i + 1L]
-        if (this_k == "freq"    && next_k == "heatmap") 0
-        else if (this_k == "heatmap" && next_k == "freq")    5
-        else if (this_k == "heatmap" && next_k == "geneset") 3
-        else                                                 2
+        if      (this_k == "freq"      && next_k == "heatmap")   0
+        else if (this_k == "heatmap"   && next_k == "freq")      5
+        else if (this_k == "heatmap"   && next_k == "genelabel") 2
+        else if (this_k == "genelabel" && next_k == "geneset")   4
+        else if (this_k == "heatmap"   && next_k == "geneset")   12
+        else                                                     2
       }, numeric(1))
       ht_gap_custom <- grid::unit(gaps, "mm")
     }
