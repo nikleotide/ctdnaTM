@@ -7,7 +7,7 @@ Standardised plotting, statistics, and multi-modal integration helpers for the e
 ## Install
 
 ```r
-install.packages("path/to/ctdnaTM_0.75.9.tar.gz", repos = NULL, type = "source")
+devtools::install_github("nikleotide/ctdnaTM")
 ```
 
 Suggested — install `ComplexHeatmap` for publication-quality oncoprints:
