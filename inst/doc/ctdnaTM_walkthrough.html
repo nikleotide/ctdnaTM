@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Hamid Nikbakht" />
+  <meta name="dcterms.date" content="2026-08-05" />
+  <title>ctdnaTM: end-to-end walkthrough</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">ctdnaTM: end-to-end walkthrough</h1>
+<p class="author">Hamid Nikbakht</p>
+<p class="date">2026-08-05</p>
+</header>
+<p>One-page pass through <code>ctdnaTM</code>: prepare → QC → filter →
+plots → pipeline. For a deeper tour of every function see
+<code>vignette("ctdnaTM_function_tour")</code>. For the filter system’s
+internals see <code>vignette("ctdnaTM_filter_internals")</code>.</p>
+<h1 id="assemble-the-prep-object">1. Assemble the prep object</h1>
+<p><code>ctdnaTM</code> builds every deliverable off a single
+<strong>prep</strong> object — a named list holding
+<code>$clinical</code>, <code>$samples</code>, <code>$variants</code>,
+and optionally <code>$assessments</code>, <code>$adrs</code>, and
+platform-specific frames. <code>ctdna_prepare()</code> assembles it from
+a Guardant Health Infinity report plus any ADaM frames.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ctdnaTM)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Real usage: replace with your infinity_report + ADaM frames.</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>sim  <span class="ot">&lt;-</span> <span class="fu">ctdna_make_mock_study</span>(<span class="at">n_patients =</span> <span class="dv">60</span>, <span class="at">seed =</span> <span class="dv">1</span>)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>prep <span class="ot">&lt;-</span> <span class="fu">ctdna_prepare</span>(</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">infinity_report =</span> sim<span class="sc">$</span>infinity_report,</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">adam            =</span> <span class="fu">list</span>(<span class="at">adsl =</span> sim<span class="sc">$</span>clinical),</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">verbose         =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">class</span>(prep)</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] &quot;ctdna_prep&quot;</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="fu">setdiff</span>(<span class="fu">names</span>(prep), <span class="st">&quot;dictionary&quot;</span>)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] &quot;samples&quot;     &quot;variants&quot;    &quot;clinical&quot;    &quot;assessments&quot;</span></span></code></pre></div>
+<p>In v0.71+, <code>ctdna_prepare()</code> no longer applies sample QC
+by default — <code>prep$variants</code> comes back raw. This is
+deliberate: two users looking at the same prep will see the same
+rows.</p>
+<h1 id="sample-qc-idempotent">2. Sample QC (idempotent)</h1>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>prep <span class="ot">&lt;-</span> <span class="fu">ctdna_sample_qc</span>(prep, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(prep<span class="sc">$</span>variants)               <span class="co"># after QC</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] 515</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>prep <span class="ot">&lt;-</span> <span class="fu">ctdna_sample_qc</span>(prep, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(prep<span class="sc">$</span>variants)               <span class="co"># unchanged on rerun</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] 515</span></span></code></pre></div>
+<h1 id="variant-filtering">3. Variant filtering</h1>
+<p>Single entry point with two mandatory flags:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: center;"><code>apply</code></th>
+<th style="text-align: center;"><code>explain</code></th>
+<th style="text-align: left;">effect</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: center;"><code>TRUE</code></td>
+<td style="text-align: center;"><code>TRUE</code></td>
+<td style="text-align: left;"><code>prep$variants</code> filtered;
+annotated snapshot at
+<code>prep$filter_explanation$&lt;sig&gt;</code></td>
+</tr>
+<tr class="even">
+<td style="text-align: center;"><code>TRUE</code></td>
+<td style="text-align: center;"><code>FALSE</code></td>
+<td style="text-align: left;"><code>prep$variants</code> filtered; no
+snapshot</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;"><code>FALSE</code></td>
+<td style="text-align: center;"><code>TRUE</code></td>
+<td style="text-align: left;"><code>prep$variants</code> unchanged;
+snapshot only</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;"><code>FALSE</code></td>
+<td style="text-align: center;"><code>FALSE</code></td>
+<td style="text-align: left;">error</td>
+</tr>
+</tbody>
+</table>
+<p>Live <code>prep$variants</code> never carries the
+<code>filtering_criteria</code> column — it lives only on the
+snapshot.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>prep <span class="ot">&lt;-</span> <span class="fu">ctdna_variant_filter</span>(prep,</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>          <span class="at">filter_scheme =</span> <span class="fu">c</span>(<span class="st">&quot;TSG_Tier1&quot;</span>,<span class="st">&quot;TSG_Tier2&quot;</span>,<span class="st">&quot;HRR14&quot;</span>),</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>          <span class="at">apply         =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>          <span class="at">explain       =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>          <span class="at">verbose       =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Row counts in the annotated snapshot</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>sig <span class="ot">&lt;-</span> <span class="fu">names</span>(prep<span class="sc">$</span>filter_explanation)[<span class="dv">1</span>]</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>sig</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] &quot;TSG_Tier1_TSG_Tier2_HRR14&quot;</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(<span class="fu">sort</span>(<span class="fu">table</span>(prep<span class="sc">$</span>filter_explanation[[sig]]<span class="sc">$</span>filtering_criteria,</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>                <span class="at">useNA =</span> <span class="st">&quot;ifany&quot;</span>), <span class="at">decreasing =</span> <span class="cn">TRUE</span>), <span class="dv">6</span>)</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;                                                             &lt;NA&gt; </span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;                                                              470 </span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;                                       FAIL::TSG_Tier1, TSG_Tier2 </span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;                                                               14 </span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;                                  PASS::TSG_Tier1(somatic_nonsyn) </span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;                                                                9 </span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;          PASS::TSG_Tier1(somatic_nonsyn), TSG_Tier2(somatic_LoF) </span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;                                                                9 </span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;                                          PASS::TSG_Tier1(fusion) </span></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;                                                                6 </span></span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; PASS::TSG_Tier1(somatic_nonsyn), TSG_Tier2(somatic_PLP_missense) </span></span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;                                                                3</span></span></code></pre></div>
+<p><strong>Branch labels</strong> are baked into every built-in scheme,
+so the annotation tells you <em>why</em> a row passed (or failed), not
+just <em>which</em> scheme:</p>
+<ul>
+<li><code>PASS::TSG_Tier1(somatic_nonsyn), TSG_Tier2(somatic_LoF)</code>
+— passed both schemes, with the branch(es) that fired.</li>
+<li><code>FAIL::TSG_Tier1, TSG_Tier2</code> — in both scopes, both
+failed.</li>
+<li><code>NA</code> — row in no scheme’s scope.</li>
+</ul>
+<h1 id="built-in-schemes">4. Built-in schemes</h1>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># All four biomarker schemes drop ClinVar benign and CHIP unconditionally.</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">visualized_scheme</span>(<span class="fu">TSG_Tier2</span>(), <span class="at">width =</span> <span class="dv">76</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; TSG_Tier2  (category: gene_set)</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; TSG Tier 2 (intermediate) on TP53/RB1/PTEN. Drops ClinVar benign and CHIP.</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Passes: germline P/LP, OR somatic LoF, OR somatic ClinVar-P/LP +</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; (missense|inframe|rare-P/LP-synonymous), OR somatic LOH/homozygous</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; deletion, OR somatic deleterious intra-chromosomal LGR (deletion,</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; tandem-duplication, inversion; all Chromosome == Fusion_chrom_b).</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; REQUIRE (gates -- if any fail -&gt; DROP):</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   |- Gene in {TP53, RB1, PTEN}</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   |- NOT (ClinVar in {Benign, Likely_benign, Benign/Likely_benign})</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   `- NOT (Somatic_status = somatic_putative_ch)</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; KEEP if ANY of these paths succeeds:</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   PATH A -- Somatic_status + ClinVar</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     |- Somatic_status = germline</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     `- ClinVar in {Pathogenic, Likely_pathogenic, Pathogenic/Likely_pathogenic, Pathogenic/Likely_pathogenic,_other, Likely_pathogenic,_other, Likely_pathogenic,_risk_factor}</span></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   PATH B -- Somatic_status + Molecular_consequence</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     |- Somatic_status = somatic</span></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     `- Molecular_consequence in {frameshift, nonsense, start_lost, stop_lost, splice_acceptor, splice_donor}</span></span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   PATH C -- Somatic_status + ClinVar + Molecular_consequence</span></span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     |- Somatic_status = somatic</span></span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     |- ClinVar in {Pathogenic, Likely_pathogenic, Pathogenic/Likely_pathogenic, Pathogenic/Likely_pathogenic,_other, Likely_pathogenic,_other, Likely_pathogenic,_risk_factor}</span></span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     `- (Molecular_consequence in {missense, inframe_indel, inframe_insertion, inframe_deletion, inframe_duplication} OR Molecular_consequence = synonymous AND ClinVar in {Pathogenic, Likely_pathogenic, Pathogenic/Likely_pathogenic, Pathogenic/Likely_pathogenic,_other, Likely_pathogenic,_other, Likely_pathogenic,_risk_factor} AND gnomAD_AF &lt; 0.01)</span></span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   PATH D -- Somatic_status + Variant_type + CNV_type</span></span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     |- Somatic_status = somatic</span></span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     |- Variant_type = CNV</span></span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     `- CNV_type in {homozygous_deletion, loh_deletion}</span></span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   PATH E -- Somatic_status + Variant_type + Functional_impact + Variant_type + Direction_a + Direction_b + Chromosome</span></span>
+<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     |- Somatic_status = somatic</span></span>
+<span id="cb4-37"><a href="#cb4-37" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     |- Variant_type = LGR</span></span>
+<span id="cb4-38"><a href="#cb4-38" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     |- Functional_impact = deleterious</span></span>
+<span id="cb4-39"><a href="#cb4-39" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     |- (Variant_type = LGR AND Direction_a = -1 AND Direction_b = 1 OR Variant_type = LGR AND Direction_a = 1 AND Direction_b = -1 OR Variant_type = LGR AND (Direction_a = 1 AND Direction_b = 1 OR Direction_a = -1 AND Direction_b = -1))</span></span>
+<span id="cb4-40"><a href="#cb4-40" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     `- Chromosome ==col Fusion_chrom_b</span></span>
+<span id="cb4-41"><a href="#cb4-41" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-42"><a href="#cb4-42" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Otherwise -&gt; DROP.</span></span></code></pre></div>
+<ul>
+<li><code>TSG_Tier1()</code> — most permissive on TP53 / RB1 /
+PTEN.</li>
+<li><code>TSG_Tier2()</code> — intermediate on TP53 / RB1 / PTEN (old
+TSG body + new intra-chromosomal LGR).</li>
+<li><code>TSG_Tier3()</code> — most restrictive on TP53 / RB1 / PTEN. No
+LGR, no fusion, no rare-syn carve-in.</li>
+<li><code>HRR14()</code> — HRR biomarker on 14 HRR genes (old HRR body +
+new intra-genic LGR).</li>
+<li><code>scheme_basic()</code> — GH Infinity “impactful alterations”
+ruleset, applied to all genes.</li>
+</ul>
+<h1 id="build-your-own-scheme">5. Build your own scheme</h1>
+<p>Two entry points:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Flat AND/OR case (positive criteria only, no negation)</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>my_short <span class="ot">&lt;-</span> <span class="fu">ctdna_create_scheme</span>(</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">name     =</span> <span class="st">&quot;my_short_tsg&quot;</span>,</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">genes    =</span> <span class="fu">c</span>(<span class="st">&quot;TP53&quot;</span>,<span class="st">&quot;RB1&quot;</span>,<span class="st">&quot;PTEN&quot;</span>),</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">criteria =</span> <span class="fu">c</span>(<span class="st">&quot;somatic&quot;</span>,<span class="st">&quot;truncating&quot;</span>),</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">combine  =</span> <span class="st">&quot;all&quot;</span>,</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">overwrite =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Full grammar (with negation, nesting, named branches)</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>my_full <span class="ot">&lt;-</span> <span class="fu">create_filtering_scheme</span>(</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rule</span>(<span class="at">Gene =</span> <span class="fu">c</span>(<span class="st">&quot;TP53&quot;</span>,<span class="st">&quot;RB1&quot;</span>,<span class="st">&quot;PTEN&quot;</span>)),</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">not</span>(<span class="fu">rule_clinvar_benign</span>()),</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">not</span>(<span class="fu">rule_ch</span>()),</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">branches =</span> <span class="fu">list</span>(</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">germline_PLP  =</span> <span class="fu">allOf</span>(<span class="fu">rule_germline</span>(), <span class="fu">rule_clinvar_path</span>()),</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">somatic_LoF   =</span> <span class="fu">allOf</span>(<span class="fu">rule_somatic</span>(),  <span class="fu">rule_truncating</span>()),</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">somatic_rare_missense =</span> <span class="fu">allOf</span>(<span class="fu">rule_somatic</span>(),</span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>                                  <span class="fu">rule</span>(<span class="at">Molecular_consequence =</span> <span class="st">&quot;missense&quot;</span>),</span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>                                  <span class="fu">rule_rare_001</span>())),</span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">name =</span> <span class="st">&quot;my_full_tsg&quot;</span>, <span class="at">overwrite =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
+<p>Both are usable with
+<code>ctdna_variant_filter(prep, "my_short_tsg", ...)</code>.</p>
+<h1 id="landscape-plots">6. Landscape plots</h1>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>prep<span class="sc">$</span>adrs <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">Patient_ID =</span> prep<span class="sc">$</span>clinical<span class="sc">$</span>Patient_ID,</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">indication =</span> <span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">&quot;NSCLC&quot;</span>,<span class="st">&quot;HNSCC&quot;</span>,<span class="st">&quot;SCLC&quot;</span>,<span class="st">&quot;mCRPC&quot;</span>),</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>                   <span class="at">length.out =</span> <span class="fu">nrow</span>(prep<span class="sc">$</span>clinical)))</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>op <span class="ot">&lt;-</span> <span class="fu">ctdna_oncoprint</span>(prep,</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>        <span class="at">gene_sets     =</span> <span class="fu">list</span>(<span class="at">TSG   =</span> <span class="fu">c</span>(<span class="st">&quot;TP53&quot;</span>,<span class="st">&quot;RB1&quot;</span>,<span class="st">&quot;PTEN&quot;</span>),</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>                             <span class="at">HRR14 =</span> <span class="fu">ctdna_gene_set</span>(<span class="st">&quot;HRR14&quot;</span>)),</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>        <span class="at">filter_scheme =</span> <span class="st">&quot;TSG_Tier1&quot;</span>,</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>        <span class="at">engine        =</span> <span class="st">&quot;ggplot&quot;</span>,</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>        <span class="at">title         =</span> <span class="st">&quot;Baseline landscape&quot;</span>)</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>op<span class="sc">$</span>plot</span></code></pre></div>
+<figure>
+<img src="figure/unnamed-chunk-6-1.png"
+alt="plot of chunk unnamed-chunk-6" />
+<figcaption aria-hidden="true">plot of chunk
+unnamed-chunk-6</figcaption>
+</figure>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>gr <span class="ot">&lt;-</span> <span class="fu">ctdna_alteration_grid</span>(prep,</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>        <span class="at">gene_sets =</span> <span class="fu">list</span>(<span class="at">TSG   =</span> <span class="fu">c</span>(<span class="st">&quot;TP53&quot;</span>,<span class="st">&quot;RB1&quot;</span>,<span class="st">&quot;PTEN&quot;</span>),</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">HRR14 =</span> <span class="fu">ctdna_gene_set</span>(<span class="st">&quot;HRR14&quot;</span>)),</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>        <span class="at">scheme    =</span> <span class="st">&quot;three&quot;</span>)</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>gr<span class="sc">$</span>plot</span></code></pre></div>
+<figure>
+<img src="figure/unnamed-chunk-7-1.png"
+alt="plot of chunk unnamed-chunk-7" />
+<figcaption aria-hidden="true">plot of chunk
+unnamed-chunk-7</figcaption>
+</figure>
+<h1 id="whole-pipeline-in-one-call">7. Whole pipeline in one call</h1>
+<p><code>ctdna_pipeline()</code> runs every deliverable step whose input
+modalities are present. Access via
+<code>res$&lt;key&gt;$plot</code>.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>res <span class="ot">&lt;-</span> <span class="fu">ctdna_pipeline</span>(prep,</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>         <span class="at">which     =</span> <span class="fu">c</span>(<span class="st">&quot;oncoprint&quot;</span>,<span class="st">&quot;alteration_grid&quot;</span>),</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">scheme    =</span> <span class="st">&quot;three&quot;</span>,</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>         <span class="at">gene_sets =</span> <span class="fu">list</span>(<span class="at">TSG   =</span> <span class="fu">c</span>(<span class="st">&quot;TP53&quot;</span>,<span class="st">&quot;RB1&quot;</span>,<span class="st">&quot;PTEN&quot;</span>),</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>                          <span class="at">HRR14 =</span> <span class="fu">ctdna_gene_set</span>(<span class="st">&quot;HRR14&quot;</span>)),</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>         <span class="at">engine    =</span> <span class="st">&quot;ggplot&quot;</span>,</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>         <span class="at">verbose   =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(res)</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] &quot;plots&quot;           &quot;failures&quot;        &quot;skipped&quot;         &quot;timing&quot;         </span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [5] &quot;oncoprint&quot;       &quot;alteration_grid&quot;</span></span></code></pre></div>
+<h1 id="where-next">Where next</h1>
+<ul>
+<li><code>vignette("ctdnaTM_function_tour")</code> — every user-facing
+function with a runnable example.</li>
+<li><code>vignette("ctdnaTM_filter_internals")</code> — how the filter
+engine works; how to extend the grammar.</li>
+<li><code>?ctdna_rules_library</code> — the full rule-predicate
+catalog.</li>
+<li><code>NEWS.md</code> — changelog.</li>
+</ul>
+<h1 id="session-info">Session info</h1>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; R version 4.3.3 (2024-02-29)</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Platform: x86_64-pc-linux-gnu (64-bit)</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Running under: Ubuntu 24.04.4 LTS</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Matrix products: default</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; BLAS:   /usr/lib/x86_64-linux-gnu/blas/libblas.so.3.12.0 </span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.12.0</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; locale:</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] C</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; time zone: Etc/UTC</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; tzcode source: system (glibc)</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; attached base packages:</span></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] stats     graphics  grDevices utils     datasets  methods   base     </span></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; other attached packages:</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] knitr_1.45     ctdnaTM_0.77.0</span></span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; loaded via a namespace (and not attached):</span></span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;  [1] vctrs_0.6.5       patchwork_1.2.0   cli_3.6.2         rlang_1.1.3      </span></span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;  [5] xfun_0.41         highr_0.10        generics_0.1.3    labeling_0.4.3   </span></span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;  [9] glue_1.7.0        colorspace_2.1-0  scales_1.3.0      fansi_1.0.5      </span></span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [13] grid_4.3.3        munsell_0.5.0     evaluate_0.23     tibble_3.2.1     </span></span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [17] lifecycle_1.0.4   compiler_4.3.3    dplyr_1.1.4       pkgconfig_2.0.3  </span></span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [21] farver_2.1.1      R6_2.5.1          tidyselect_1.2.0  utf8_1.2.4       </span></span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [25] pillar_1.9.0      magrittr_2.0.3    tools_4.3.3       withr_2.5.0      </span></span>
+<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [29] gtable_0.3.4      ggnewscale_0.4.10 ggplot2_3.4.4</span></span></code></pre></div>
+</body>
+</html>
