@@ -1,0 +1,37 @@
+> ## ⚠️ NOTICE — DEVELOPMENT SOFTWARE; NO WARRANTY; NO LIABILITY
+>
+> **This software is under active development and is provided solely for
+> research, testing, and evaluation purposes.** It has not been validated,
+> verified, or qualified for any production, clinical, diagnostic, or
+> regulatory use, and no representation is made as to its accuracy,
+> completeness, reliability, reproducibility, or fitness for any purpose.
+> Functionality, interfaces, and outputs are subject to change without notice
+> and may be incomplete, unstable, or incorrect.
+>
+> **THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF
+> ANY KIND, EXPRESS, IMPLIED, OR STATUTORY**, including without limitation the
+> implied warranties of merchantability, fitness for a particular purpose,
+> accuracy, and non-infringement.
+>
+> **IN NO EVENT SHALL THE AUTHOR BE LIABLE** for any claim, demand, loss,
+> cost, expense, or damages of any kind — whether direct, indirect,
+> incidental, special, exemplary, consequential, or punitive, and including
+> without limitation loss of data, loss of profits, business interruption, or
+> costs of substitute goods or services — arising from or in connection with
+> the software, its use, its outputs, or any inability to use it, whether in
+> an action of contract, tort (including negligence), strict liability, or
+> otherwise, and regardless of whether the author has been advised of the
+> possibility of such damages.
+>
+> **Any person or entity electing to use this software does so entirely at
+> their own risk and assumes full and sole responsibility** for all
+> consequences arising therefrom, including the independent verification and
+> validation of any result, output, figure, or interpretation derived from it.
+> Nothing herein shall be construed as creating any duty, obligation,
+> warranty, support commitment, or liability on the part of the author.
+>
+> **This software is not a medical device.** It is not intended for use in the
+> diagnosis, treatment, cure, mitigation, or prevention of disease, nor for
+> any clinical decision-making, patient management, or regulatory submission.
+>
+> Use of this software constitutes acceptance of this notice in its entirety.
