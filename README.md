@@ -1329,78 +1329,7 @@ ctdna_opts_load(f)
 unlink(f)
 ```
 
-**Renamed in 0.78.0.** `cancertype` became `indication`, and its
-default changed from `"Cancertype"` to `"indication"`. The old
-key still works and emits a one-line deprecation message:
-
-```r
-ctdna_opts("cancertype")
-#> ctdna_opts: `cancertype` is deprecated and was renamed to
-#>   `indication` in v0.78.0. Reading `indication`.
-#> [1] "indication"
-```
-
-Most keys accept any value, but a subset is validated at
-set-time. `ctdna_opts_choices()` dumps the same table the
-docstring shows:
-
-| Key | Allowed values |
-|:--|:--|
-| `pairwise_test` | `"wilcox"` / `"t"` / `"kruskal"` / `"anova"` / `"auto"` |
-| `cor_method` | `"spearman"` / `"pearson"` / `"kendall"` |
-| `stat_position` | `"subtitle"` / `"caption"` / `"on_plot"` / `"none"` |
-| `legend_position` | `"right"` / `"left"` / `"top"` / `"bottom"` / `"none"` |
-| `expression_unit` | `"log2_tpm_plus_one"` / `"tpm"` |
-| `show_stats`, `show_n` | `TRUE` / `FALSE` |
-| `display_floor`, `loq` | numeric in `[1e-10, 1]` |
-| `alpha`, `point_alpha` | numeric in `[0, 1]` |
-| `point_size` | numeric in `[0.1, 20]` |
-| `box_width`, `bar_width` | numeric in `[0.05, 1]` |
-| `discord_log10` | numeric in `[0, 10]` |
-
----
-
-## Rule predicates catalog
-
-Variant filtering is programmable. The DSL ships **~60
-zero-argument rule-predicate constructors** plus the
-parameterised `rule_amp_thresh(cn_threshold = 4)`, all sharing a
-collection page (`?ctdna_rules_library`):
-
-| Family | Examples | What it checks |
-|:--|:--|:--|
-| `rule_is_<TYPE>()` | `rule_is_SNV`, `rule_is_Indel`, `rule_is_CNV`, `rule_is_Fusion`, `rule_is_LGR` | `Variant_type` |
-| `rule_lgr_<value>()` | `rule_lgr_deletion`, `rule_lgr_tandem_duplication`, `rule_lgr_inversion` | `LGR_subtype` |
-| `rule_cnv_<value>()` | `rule_cnv_focal_amp`, `rule_cnv_amp`, `rule_cnv_homozyg_del`, `rule_cnv_loh_del` | `CNV_type` |
-| `rule_<mc>()` | `rule_missense`, `rule_nonsense`, `rule_frameshift`, `rule_splice_donor`, `rule_synonymous`, `rule_promoter`, ... | `Molecular_consequence` |
-| `rule_<origin>()` | `rule_germline`, `rule_somatic`, `rule_ch` | `Somatic_status` |
-| `rule_clinvar_<class>()` | `rule_clinvar_benign`, `rule_clinvar_path`, `rule_clinvar_vus`, `rule_clinvar_conflict` | ClinVar class |
-| `rule_genes_<set>()` | `rule_genes_HRR14`, `rule_genes_TSG`, `rule_genes_RTK`, `rule_genes_Cell_Cycle`, `rule_genes_TP53_pathway`, `rule_genes_MMR`, `rule_genes_PI3K` | Gene-set membership |
-| `rule_ind_<indication>()` | `rule_ind_NSCLC`, `rule_ind_BRCA`, `rule_ind_SCLC`, `rule_ind_HNSCC`, `rule_ind_CRC`, `rule_ind_mCRPC`, `rule_ind_GBM` | Indication |
-| `rule_rare_<AF>()` / `rule_common_<AF>()` | `rule_rare_001`, `rule_rare_0001`, `rule_common_001` | gnomAD AF thresholds |
-| Functional-impact atoms | `rule_deleterious`, `rule_reversion`, `rule_biallelic` | Impact flags |
-| Composites | `rule_truncating`, `rule_is_LGR_deleterious`, `rule_splice_event_mc` | Built from atoms |
-
-Combinators: `allOf(...)`, `anyOf(...)`, `not(...)`. All rules
-are lazy — changes to `ctdna_opts()` are picked up at use time.
-
-```r
-# "somatic SNV missense, not in ClinVar benign"
-allOf(rule_is_SNV(), rule_missense(),
-      rule_somatic(), not(rule_clinvar_benign()))
-
-# HRR14 genes + somatic + rare (<1% AF)
-allOf(rule_genes_HRR14(), rule_somatic(), rule_rare_001())
-
-# Assemble into a named scheme
-sch <- create_filtering_scheme(
-  rule_is_SNV(),
-  anyOf(rule_missense(), rule_truncating()),
-  not(rule_germline()),
-  name = "snv_coding_somatic")
-```
-
-Custom schemes without touching the DSL:
+Custom schemes:
 
 ```r
 ctdna_create_scheme(
@@ -1413,10 +1342,6 @@ ctdna_create_scheme(
 `criteria` accepts: `"truncating"`, `"missense"`,
 `"clinvar_path"`, `"cnv_del"`, `"cnv_amp"`, `"lgr"`, `"fusion"`,
 `"somatic"`, `"germline"`, `"rare"`.
-
-Every scheme comes with `ctdna_test_scheme("name")` — one
-synthetic variant row per branch, run through the evaluator, so
-you can validate a scheme before using it in production.
 
 ---
 
