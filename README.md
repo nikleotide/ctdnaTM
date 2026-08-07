@@ -1264,47 +1264,6 @@ For one figure per cohort, loop over the cohorts you want — see
 
 ---
 
-## Statistical helpers
-
-Eight standalone functions cover the tests every plot uses
-internally. All accept plain R vectors / data frames.
-
-```r
-# Format p-values for annotations
-ctdna_pval_label(c(0.0001, 0.034))          # "p<0.001" "p=0.034"
-
-# Auto-selected group comparison test
-set.seed(42)
-df <- data.frame(group = rep(c("a","b","c"), each = 12),
-                  x    = c(rnorm(12), rnorm(12, 1), rnorm(12, 1.5)))
-ctdna_run_group_test(df, "x", "group")
-
-# All pairwise Wilcoxon comparisons
-ctdna_pairwise_ranksum(df, "x", "group")
-
-# Correlation with Spearman by default
-x <- runif(30); y <- 2 * x + rnorm(30, sd = 0.3)
-ctdna_cor_test(x, y)
-ctdna_cor_test(x, y, method = "pearson")
-
-# Paired test (baseline vs on-treatment measurements)
-a <- runif(20, 5, 15); b <- a * runif(20, 0.2, 0.9)
-ctdna_paired_test(a, b)                              # paired Wilcoxon
-ctdna_paired_test(a, b, method = "paired_t")
-
-# Cohen's kappa on a 3-level agreement table
-tab <- as.table(matrix(c(8,2,0, 1,10,1, 0,1,7), nrow = 3, byrow = TRUE,
-                        dimnames = list(rater1 = c("PR","SD","PD"),
-                                        rater2 = c("PR","SD","PD"))))
-ctdna_cohen_kappa(tab)
-ctdna_weighted_kappa(tab, weights = "quadratic")
-
-# Bundled concordance summary (kappa + agreement + McNemar for 2x2)
-ctdna_concordance_test(tab)
-```
-
----
-
 ## Configuration — `ctdna_opts()`
 
 Session-wide defaults live in `ctdna_opts()` — column-name
