@@ -2,6 +2,16 @@
 
 <img src="man/figures/logo.png" align="right" width="180" alt="ctdnaTM"/>
 
+> **⚠️ IMPORTANT NOTICE**
+>
+> This software is under active development and is provided for research,
+> testing, and evaluation purposes only, "AS IS" and without warranty of any
+> kind. The author accepts no liability whatsoever for any loss or damage
+> arising from its use, and any person using it does so entirely at their own
+> risk and is solely responsible for independently verifying all results.
+> This is not a medical device and is not intended for clinical or diagnostic
+> use.
+
 > **⚠️ MOCK DATA THROUGHOUT — READ BEFORE USING ANY OUTPUT**
 >
 > Every dataset, indication name, cohort structure, and figure in
